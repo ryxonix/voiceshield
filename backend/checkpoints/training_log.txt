@@ -1,0 +1,19 @@
+Epoch 001/030 | Train Loss: 0.7262 | Train Acc: 50.0% | Val EER: 0.1000
+  ✓ Best model saved (EER=0.1000) → checkpoints\best_model.pth
+Epoch 001/030 | Train Loss: 0.7087 | Train Acc: 50.0% | Val EER: 0.0000
+  ✓ Best model saved (EER=0.0000) → checkpoints\best_model.pth
+Epoch 002/030 | Train Loss: 0.6151 | Train Acc: 50.0% | Val EER: 0.0030
+Epoch 001/030 | Train Loss: 0.7262 | Train Acc: 50.0% | Val EER: 0.3625
+  ✓ Best model saved (EER=0.3625) → checkpoints\best_model.pth
+Epoch 002/030 | Train Loss: 0.7255 | Train Acc: 50.0% | Val EER: 0.6875
+Epoch 003/030 | Train Loss: 0.7247 | Train Acc: 50.0% | Val EER: 0.1625
+  ✓ Best model saved (EER=0.1625) → checkpoints\best_model.pth
+Epoch 004/030 | Train Loss: 0.7238 | Train Acc: 50.0% | Val EER: 0.4375
+Epoch 005/030 | Train Loss: 0.7229 | Train Acc: 50.0% | Val EER: 0.1625
+Epoch 006/030 | Train Loss: 0.7217 | Train Acc: 50.0% | Val EER: 0.2625
+Epoch 007/030 | Train Loss: 0.7207 | Train Acc: 50.0% | Val EER: 0.2625
+Epoch 008/030 | Train Loss: 0.7187 | Train Acc: 50.0% | Val EER: 0.2000
+Epoch 009/030 | Train Loss: 0.7174 | Train Acc: 50.0% | Val EER: 0.1375
+  ✓ Best model saved (EER=0.1375) → checkpoints\best_model.pth
+Epoch 010/030 | Train Loss: 0.7154 | Train Acc: 50.0% | Val EER: 0.0625
+  ✓ Best model saved (EER=0.0625) → checkpoints\best_model.pth
