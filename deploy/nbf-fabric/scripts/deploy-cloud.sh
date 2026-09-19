@@ -22,7 +22,18 @@ docker compose up -d --build
 
 echo "==> [4/5] Create mychannel + install chaincode"
 CHANNEL=mychannel
-until docker exec vsh-peer0 peer node status 2>/dev/null | grep -q SERVER; do sleep 2; done
+# `peer node status` was removed in Fabric 2.x (it only prints usage), so poll
+# `peer channel list` (needs the admin identity) until the peer's gRPC is up.
+echo "==> Waiting for peer to accept calls…"
+for _ in $(seq 1 90); do
+  docker exec \
+    -e CORE_PEER_LOCALMSPID=Org1MSP \
+    -e CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/crypto/peerOrganizations/vsh.example.com/users/Admin@vsh.example.com/msp \
+    -e CORE_PEER_ADDRESS=peer0:7051 \
+    -e CORE_PEER_TLS_ENABLED=false \
+    vsh-peer0 peer channel list >/dev/null 2>&1 && break
+  sleep 2
+done
 docker exec \
   -e CORE_PEER_LOCALMSPID=Org1MSP \
   -e CORE_PEER_MSPCONFIGPATH=/etc/hyperledger/crypto/peerOrganizations/vsh.example.com/users/Admin@vsh.example.com/msp \
