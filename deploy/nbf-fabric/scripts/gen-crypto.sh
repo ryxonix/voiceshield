@@ -5,13 +5,13 @@ set -euo pipefail
 
 echo "==> Cryptogen: Org1 + Orderer identities"
 mkdir -p crypto-config channel-artifacts gateway/wallet
-docker run --rm \
+docker run --rm --user "$(id -u):$(id -g)" \
   -v ${PWD}:/work -w /work \
   hyperledger/fabric-tools:2.2 \
   cryptogen generate --config=./crypto-config.yaml --output=./crypto-config
 
 echo "==> Configtxgen: genesis (system channel)"
-docker run --rm \
+docker run --rm --user "$(id -u):$(id -g)" \
   -v ${PWD}:/work -w /work \
   -e FABRIC_CFG_PATH=/work \
   hyperledger/fabric-tools:2.2 \
@@ -19,7 +19,7 @@ docker run --rm \
   -outputBlock ./channel-artifacts/genesis.block -channelID systemchannel
 
 echo "==> Configtxgen: mychannel create tx"
-docker run --rm \
+docker run --rm --user "$(id -u):$(id -g)" \
   -v ${PWD}:/work -w /work \
   -e FABRIC_CFG_PATH=/work \
   hyperledger/fabric-tools:2.2 \
