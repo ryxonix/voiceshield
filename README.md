@@ -299,6 +299,7 @@ Local PoW block ──▶ NBF gateway ──▶ Fabric chaincode AnchorReport
 - **Fail-open**: if the Fabric network is offline the local PoW chain remains authoritative and the anchor row is marked `pending` (retryable via `POST /api/blockchain/retry/{call_id}`). The `DemoAnchor` provider records the same payload locally so offline demos are truthful (`demo`, never `anchored`).
 - **Deploy** (free tier): see [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — `docker compose up -d` on Oracle Cloud **ARM A1 free tier** (IPFS + Fabric 2.2 peer/orderer (cryptogen identities, no CA) + trimmed `nbf-samplerest` gateway + `voiceshield-report.go` chaincode) or **WSL2 Ubuntu** on a laptop. Zero cloud spend either way.
 - **Ministry alignment**: MeitY's National Blockchain Framework (Vishvasya, CDAC/MeitY) is the same substrate NBF-Lite kits teach; anchors at NIC DCs (Bhubaneswar/Pune/Hyderabad) have already authenticated 34 Cr+ documents, and the same framework is being used for telecom blockchain (SMS/Spam enforcement across 1.13 L entities with RBI/SEBI/NIC/C-DAC).
+- **Live-verified**: anchored end-to-end on 2026-09-19 (Fabric `AnchorReport` `tx-id tx-test-1`, IPFS CID `QmZimdoSUNhXCrt…48kBa`, `GET /api/blockchain/onchain/e2e-NBF-LIVE-01` → `verified:true`, chain `VoiceShieldAIV1` height 14, 78 tests passing) — see [`docs/nbf-live-demo.md`](docs/nbf-live-demo.md).
 
 ---
 
