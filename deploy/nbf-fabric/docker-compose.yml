@@ -14,6 +14,7 @@
 services:
   peer0:
     image: hyperledger/fabric-peer:2.2
+    restart: unless-stopped
     container_name: vsh-peer0
     environment:
       - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
@@ -46,6 +47,7 @@ services:
 
   couchdb:
     image: couchdb:3.1
+    restart: unless-stopped
     container_name: vsh-couchdb
     environment:
       - COUCHDB_USER=admin
@@ -55,6 +57,7 @@ services:
 
   orderer:
     image: hyperledger/fabric-orderer:2.2
+    restart: unless-stopped
     container_name: vsh-orderer
     environment:
       - FABRIC_LOGGING_SPEC=info
@@ -77,6 +80,7 @@ services:
 
   ca:
     image: hyperledger/fabric-ca:1.4.9
+    restart: unless-stopped
     container_name: vsh-ca
     environment:
       - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
@@ -89,6 +93,7 @@ services:
 
   ipfs:
     image: ipfs/kubo:latest
+    restart: unless-stopped
     container_name: vsh-ipfs
     command: daemon --migrate=true
     ports:
@@ -97,6 +102,7 @@ services:
 
   gateway:
     build: ./gateway
+    restart: unless-stopped
     container_name: vsh-gateway
     environment:
       - GATEWAY_PORT=4000
