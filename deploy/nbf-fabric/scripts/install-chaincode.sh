@@ -14,9 +14,10 @@ ADMIN_MSP=/etc/hyperledger/crypto/peerOrganizations/vsh.example.com/users/Admin@
 
 echo "==> Packaging chaincode"
 # The golang packager normalizes the module root by invoking `go`, which is
-# not shipped in the fabric-peer image. Install it once if missing.
-docker exec -u root vsh-peer0 bash -lc \
-  'command -v go >/dev/null 2>&1 || { apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq golang-go >/dev/null; }'
+# not shipped in the fabric-peer image. Install it once if missing
+# (peer:2.2 is Alpine -> apk; Oracle-OpenFairflow builds are Ubuntu -> apt).
+docker exec -u root vsh-peer0 sh -lc \
+  'command -v go >/dev/null 2>&1 || { if command -v apk >/dev/null 2>&1; then apk add --no-cache go >/dev/null; else DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq golang-go >/dev/null; fi }'
 docker exec vsh-peer0 peer lifecycle chaincode package \
   ${ART_DIR}/${CC_NAME}.tgz \
   --path ${CC_PATH} \
