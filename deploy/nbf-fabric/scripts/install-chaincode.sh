@@ -25,13 +25,6 @@ docker exec vsh-peer0 peer lifecycle chaincode package \
   --label "${CC_NAME}_${CC_VERSION}"
 
 echo "==> Install on peer0"
-docker exec \
-  -e CORE_PEER_LOCALMSPID=Org1MSP \
-  -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
-  -e CORE_PEER_ADDRESS=peer0:7051 \
-  -e CORE_PEER_TLS_ENABLED=false \
-  vsh-peer0 peer lifecycle chaincode install ${ART_DIR}/${CC_NAME}.tgz
-
 PKG_ID=$(docker exec \
   -e CORE_PEER_LOCALMSPID=Org1MSP \
   -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
@@ -39,6 +32,24 @@ PKG_ID=$(docker exec \
   -e CORE_PEER_TLS_ENABLED=false \
   vsh-peer0 peer lifecycle chaincode queryinstalled \
   | grep -o "${CC_NAME}_${CC_VERSION}:[A-Za-z0-9]*" | head -1)
+
+if [ -n "${PKG_ID}" ]; then
+  echo "    already installed: ${PKG_ID}"
+else
+  docker exec \
+    -e CORE_PEER_LOCALMSPID=Org1MSP \
+    -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
+    -e CORE_PEER_ADDRESS=peer0:7051 \
+    -e CORE_PEER_TLS_ENABLED=false \
+    vsh-peer0 peer lifecycle chaincode install ${ART_DIR}/${CC_NAME}.tgz
+  PKG_ID=$(docker exec \
+    -e CORE_PEER_LOCALMSPID=Org1MSP \
+    -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
+    -e CORE_PEER_ADDRESS=peer0:7051 \
+    -e CORE_PEER_TLS_ENABLED=false \
+    vsh-peer0 peer lifecycle chaincode queryinstalled \
+    | grep -o "${CC_NAME}_${CC_VERSION}:[A-Za-z0-9]*" | head -1)
+fi
 echo "    package id = ${PKG_ID}"
 
 echo "==> Approve for Org1"
