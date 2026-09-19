@@ -64,7 +64,11 @@ services:
       - ORDERER_GENERAL_LOCALMSPDIR=/etc/hyperledger/msp
       - ORDERER_GENERAL_TLS_ENABLED=false
     volumes:
-      - ./crypto-config/ordererOrganizations/vsh.example.com/orderers/orderer.vsh.example.com/msp:/etc/hyperledger/msp
+      - ./crypto-config/ordererOrganizations/vsh.example.com/orderers/orderer/msp:/etc/hyperledger/msp
+    networks:
+      default:
+        aliases:
+          - orderer.vsh.example.com
     ports:
       - "7050:7050"
 
