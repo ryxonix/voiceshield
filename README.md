@@ -56,6 +56,10 @@ Incident log  ─▶  I4C-ready forensic PDF
 | Risk | Role-aware thresholds — Adult ≥ 0.85 critical, Child ≥ 0.70 critical (`ADULT_THRESHOLD` / `CHILD_THRESHOLD` in `.env`) |
 | Alerting | Telegram, Gmail SMTP, ntfy.sh, Fast2SMS, webhook — all optional |
 | Escalation | **Suspected** fraud → optional DoT conduct hand-off (Sanchar Saathi / Chakshu / DIP) via `CHAKSHU_DIP_WEBHOOK_URL`; **confirmed** fraud → I4C/1930 flow in the forensic PDF |
+| Context | Optional **call-context enrichment** (opt-in, `CONTEXTUAL_ENRICHMENT=true`): known-contact, caller reputation (escalation count), call-origin and transaction value adjust the risk before thresholds — fail-open when no context is provided |
+| Verification | **Configurable mitigation workflows** (`backend/workflows.json`, JSON — no code deploy): per-role × risk-band actions + channels (pre-transaction call-back, MFA, supervisor escalation) with `POST /api/incidents/{iid}/escalate` feeding back caller reputation |
+| SDK | Official **Python SDK** (`backend/sdk/voiceshield_sdk`, sync + async) on an API contract defined in `backend/sdk/voiceshield.proto` (proto3) — REST + live WebSocket call sessions |
+| On-device | **Edge inference worker** (`deploy/edge/vs_edge.py`) — CLI-only, no GPU/cloud dependency, proves the on-device inference option |
 | Child Shield | Lower threshold, auto-mute, protective overlay |
 | Forensics | I4C-ready PDF reports (IST timestamps, legal next steps) |
 | Integrity | SHA-256 + Merkle-root anchored to a PoW blockchain ledger |
@@ -158,7 +162,11 @@ Double-click **`start_all.bat`** (backend :8000 + frontend :5173).
 | GET | `/api/blockchain/onchain/{call_id}` | External anchor status/verification for one call |
 | POST | `/api/blockchain/retry/{call_id}` | Re-attempt a `pending` NBF-Fabric/IPFS anchor |
 | POST | `/api/speakers/register` | Enroll a speaker voice-print |
+| POST | `/api/incidents/{iid}/escalate` | Confirm fraud → escalate + bump caller reputation for future calls |
+| GET | `/api/workflows` | Current mitigation workflow rules (adult/child × risk band) |
 | GET | `/health`, `/info` | Health / model status |
+
+> `/api/analyze` also accepts optional context fields (multipart form: `caller`, `origin`, `txn_value`, `txn_category`, `known_contact`); the live WebSocket accepts the same as query params. See [`backend/sdk/SDK_README.md`](backend/sdk/SDK_README.md) for the SDK + proto contract.
 
 ---
 
@@ -174,13 +182,17 @@ voiceshield/
 │   │   ├── engine/              # dhwani, aasist_official, prosody, fusion,
 │   │   │                        #   ring_buffer, watermark, speaker, risk,
 │   │   │                        #   pipeline
+│   │   ├── context/             # call-context enrichment (opt-in)
 │   │   ├── streaming/           # WebSocket live-call endpoint
-│   │   ├── mitigation/          # Role-aware alerts (Telegram/SMTP/ntfy/Fast2SMS/webhook)
+│   │   ├── mitigation/          # Role-aware alerts + configurable workflows
+│   │   │                        #   (workflows.py + ../workflows.json), escalate
 │   │   ├── forensics/           # I4C-ready PDF reports
 │   │   ├── blockchain/          # PoW report ledger (local) + external NBF anchor
 │   │   │   │                    #   external_anchor.py (AES-256-GCM, IPFS, gateway)
 │   │   ├── compliance/          # DPDP Act posture helpers
 │   │   └── store.py             # In-memory / Neon persistence
+│   ├── sdk/                     # voiceshield_sdk (sync/async) + voiceshield.proto
+│   ├── workflows.json           # editable mitigation workflow rules (bank/enterprise/gov)
 │   ├── training/                # augmentations, dataset, train, evaluate,
 │   │   │                        #   fetch_indic (FLEURS + TTS spoof), merge_protocols
 │   ├── models/                  # ONNX + .onnx.data (aasist_l, dhwani — git-ignored, regenerate via export_onnx)
@@ -191,6 +203,8 @@ voiceshield/
 │   ├── .env                     # ← ADD YOUR API KEYS HERE
 │   ├── SOURCES_AND_TECHNOLOGY.md  # data licenses + tech inventory (SIH)
 │   └── requirements.txt
+├── deploy/
+│   └── edge/                    # vs_edge.py — on-device inference worker (CLI)
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/               # Dashboard, Incidents, Reports

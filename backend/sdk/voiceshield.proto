@@ -1,0 +1,146 @@
+// VoiceShield AI — external integration contract.
+//
+// This is the REST/gRPC integration contract referenced by SIH26104
+// ("REST/gRPC APIs and SDKs for integration with core banking systems,
+// contact center platforms, enterprise communication tools, and telecom
+// networks"). The shipped backend exposes the identical surface over REST
+// (see FastAPI /docs at /openapi.json). A gRPC-only team can implement the
+// same service contract below; field names mirror the REST API 1:1 so no
+// semantic mapping is needed.
+//
+// proto3, optional gRPC field presence.
+
+syntax = "proto3";
+
+package voiceshield.v1;
+
+option java_package = "ai.voiceshield.v1";
+option go_package = "voiceshield/v1;voiceshieldv1";
+
+// ── Detection ─────────────────────────────────────────────────────────────
+
+message AnalyzeRequest {
+  bytes audio = 1;            // decoded PCM 16-bit mono @16kHz (see AnalyzeOptions)
+  string role = 2;            // "adult" | "child"
+  // Contextual enrichment (mirrors /api/analyze form fields).
+  string caller = 3;
+  string origin = 4;          // telecom | voip | enterprise | unknown
+  double txn_value = 5;       // INR
+  string txn_category = 6;    // e.g. fund_transfer
+  bool known_contact = 7;     // explicit override (unset = auto-check)
+  int64 prior_flags = 8;      // explicit override (unset = auto-check)
+}
+
+message AnalyzeResponse {
+  double peak_score = 1;      // contextual (enriched) risk score 0..1
+  string risk_band = 2;       // low | medium | high | critical
+  int32 windows_analyzed = 3;
+  string recommendation = 4;
+  repeated string recommended_actions = 5;
+  ContextDetail context = 6;  // transparent modifier arithmetic
+}
+
+message ContextDetail {
+  bool enabled = 1;
+  bool applied = 2;
+  map<string, string> signals = 3;
+  map<string, double> modifiers = 4;
+  double base_score = 5;
+  double adjusted_score = 6;
+}
+
+message DetectRequest {
+  bytes audio = 1;
+  string language = 2;        // auto | en | hi | kn ...
+}
+message DetectResponse {
+  string label = 1;           // bonafide | spoof
+  double synthetic_score = 2; // 0 (real) .. 1 (synthetic)
+  double confidence = 3;
+}
+
+// ── Incidents + configurable workflows ────────────────────────────────────
+
+message Incident {
+  string id = 1;
+  string session_id = 2;
+  string role = 3;
+  string severity = 4;
+  double score = 5;
+  double base_score = 6;
+  ContextDetail context = 7;
+  repeated string triggers = 8;
+  bool speaker_mismatch = 9;
+  bool acknowledged = 10;
+  string created_at = 11;
+}
+
+message ListIncidentsRequest { int32 limit = 1; }
+message ListIncidentsResponse { repeated Incident incidents = 1; }
+
+message GetIncidentRequest { string id = 1; }
+
+message AcknowledgeRequest { string id = 1; }
+message AcknowledgeResponse { bool ok = 1; string id = 2; }
+
+message EscalateRequest { string id = 1; string note = 2; }
+message EscalateResponse {
+  bool ok = 1;
+  string id = 2;
+  bool escalated = 3;
+  int32 caller_flag_count = 4;
+}
+
+message GetWorkflowsRequest {}
+message WorkflowRule {
+  string role = 1;
+  string band_min = 2;        // low | medium | high | critical
+  repeated string actions = 3;
+  repeated string channels = 4;
+}
+message GetWorkflowsResponse {
+  int32 version = 1;
+  repeated WorkflowRule rules = 2;
+  string active_path = 3;
+}
+
+// ── Tamper-evident ledger (local PoW chain + NBF external anchor) ─────────
+
+message VerifyCallRequest { string call_id = 1; }
+message VerifyCallResponse {
+  bool valid = 1;
+  string anchor_status = 2;   // anchored | pending | demo | not_anchored
+  string ipfs_cid = 3;
+  string tx_id = 4;
+  repeated string problems = 5;
+}
+
+message RetryAnchorRequest { string call_id = 1; }
+message RetryAnchorResponse { map<string, string> result = 1; }
+
+// ── Speaker enrollment (cross-session identity) ───────────────────────────
+
+message RegisterSpeakerRequest {
+  bytes audio = 1;            // >= 0.5s speech
+  string label = 2;
+  string language = 3;
+}
+message RegisterSpeakerResponse { bool ok = 1; string label = 2; int32 dim = 3; }
+
+// ── Service ───────────────────────────────────────────────────────────────
+
+service VoiceShield {
+  rpc Detect(DetectRequest) returns (DetectResponse);
+  rpc Analyze(AnalyzeRequest) returns (AnalyzeResponse);
+
+  rpc ListIncidents(ListIncidentsRequest) returns (ListIncidentsResponse);
+  rpc GetIncident(GetIncidentRequest) returns (Incident);
+  rpc Acknowledge(AcknowledgeRequest) returns (AcknowledgeResponse);
+  rpc Escalate(EscalateRequest) returns (EscalateResponse);
+  rpc GetWorkflows(GetWorkflowsRequest) returns (GetWorkflowsResponse);
+
+  rpc VerifyCall(VerifyCallRequest) returns (VerifyCallResponse);
+  rpc RetryAnchor(RetryAnchorRequest) returns (RetryAnchorResponse);
+
+  rpc RegisterSpeaker(RegisterSpeakerRequest) returns (RegisterSpeakerResponse);
+}

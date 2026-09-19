@@ -53,3 +53,30 @@ def recommendation(band: str, role: str = "adult") -> str:
     if band == "medium":
         return "MEDIUM — Voice integrity questionable: escalate for manual review."
     return "LOW — Voice integrity nominal, continuing real-time monitoring."
+
+
+def recommended_actions(band: str, role: str = "adult") -> list[str]:
+    """
+    Pre-transaction verification prompts surfaced to frontline staff before a
+    sensitive action (fund transfer / privileged access) is taken. Child path
+    stays protective (mute-first), adult path recommends secondary verification
+    per SIH26104 ("call-back, multifactor authentication, supervisor escalation").
+    """
+    if role == "child":
+        if band == "critical":
+            return ["auto-mute speaker", "notify guardian", "notify authorities", "escalate to supervisor"]
+        if band == "high":
+            return ["auto-mute speaker", "verify caller identity"]
+        return ["flag for manual review"]
+    if band == "critical":
+        return [
+            "warn user",
+            "require call-back verification on originating line",
+            "require MFA / OTP challenge",
+            "escalate to supervisor",
+        ]
+    if band == "high":
+        return ["warn user", "require secondary verification (call-back or MFA)"]
+    if band == "medium":
+        return ["flag for manual review"]
+    return ["continue real-time monitoring"]

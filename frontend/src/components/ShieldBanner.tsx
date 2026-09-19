@@ -5,8 +5,28 @@ export function ShieldBanner({ mitigation, onDismiss }: { mitigation?: any; onDi
 
   if (!mitigation) return null
 
-  const { action, score, threshold, role, message } = mitigation
+  const { action, score, threshold, role, message, recommended_actions, context } = mitigation || {}
   const isChild = action === 'child_shield' || role === 'child'
+  const actions = Array.isArray(recommended_actions) ? recommended_actions : []
+
+  const promptList = actions.length > 0 && (
+    <ul className="mt-2 list-inside space-y-1">
+      {actions.map((item: string) => (
+        <li key={item} className="flex items-start gap-2">
+          <span className="mt-px shrink-0">▸</span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  )
+
+  const contextNote = context?.applied ? (
+    <p className="mt-2 text-[12px] text-zinc-500">
+      +{(context.adjusted_score - context.base_score) >= 0 ? '▲' : '▼'}{' '}
+      {t('contextual enrichment applied')} —{' '}
+      {Object.keys(context.modifiers || {}).join(', ') || t('no modifiers')}
+    </p>
+  ) : null
 
   if (isChild) {
     return (
@@ -24,6 +44,8 @@ export function ShieldBanner({ mitigation, onDismiss }: { mitigation?: any; onDi
           <p className="mt-2 text-[14px] leading-relaxed text-zinc-600">
             {message || t('A potential AI-cloned voice was detected. A trusted guardian should verify the caller before continuing.')}
           </p>
+          {promptList}
+          {contextNote}
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <button
               onClick={onDismiss}
@@ -59,6 +81,8 @@ export function ShieldBanner({ mitigation, onDismiss }: { mitigation?: any; onDi
           <span className="font-mono text-zinc-500">{t('{p}% synthetic', { p: (score * 100).toFixed(0) })}</span>
           <span className="text-zinc-400">· {t('threshold {t}%', { t: (threshold * 100).toFixed(0) })}</span>
         </div>
+        {promptList}
+        {contextNote}
       </div>
     </div>
   )

@@ -119,6 +119,24 @@ class Settings(BaseSettings):
     fusion_model_weight: float = 0.7
     fusion_xai_weight: float = 0.3
 
+    # ── Contextual Enrichment (opt-in, SIH26104 "contextual enrichment") ──
+    # Adds conservative, transparent modifiers (caller origin, known-contact,
+    # transaction value, historical fraud flags) on top of the acoustic score.
+    # Default OFF so detection behavior is unchanged without config; fail-open:
+    # no context supplied -> acoustic score untouched.
+    contextual_enrichment: bool = False
+    context_unknown_origin_penalty: float = 0.05
+    context_unknown_contact_penalty: float = 0.05
+    context_known_contact_boost: float = 0.05
+    context_high_value_penalty: float = 0.05
+    context_high_value_threshold: float = 100000.0   # INR
+    context_prior_flag_penalty: float = 0.03         # per flag, capped at 3
+
+    # ── Configurable Mitigation Workflows ─────────────────────────────
+    # JSON rules file mapping role+risk-band to automated actions/channels.
+    # Banks/enterprises/gov can edit it without a code deploy.
+    workflows_path: str = "workflows.json"
+
     # ── Database & External Services ───────────────────────────────────
     database_url: str = ""
     resend_api_key: str = ""

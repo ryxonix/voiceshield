@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, Query
+from fastapi import FastAPI, File, UploadFile, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 
@@ -158,6 +158,10 @@ def _serialize_session(s: dict) -> dict:
         "status": s["status"],
         "started_at": s["started_at"],
         "ended_at": s["ended_at"],
+        "caller": s.get("caller") or "",
+        "origin": s.get("origin") or "",
+        "txn_value": round(float(s.get("txn_value") or 0.0), 2),
+        "context": _json_field(s.get("context_json")),
     }
 
 
@@ -175,12 +179,26 @@ def _serialize_incident(i: dict) -> dict:
         "language": i.get("language", "auto"),
         "severity": i["severity"],
         "score": round(float(i["score"]), 4),
+        "base_score": round(float(i.get("base_score") or i["score"]), 4),
+        "context": _json_field(i.get("context_json")),
         "triggers": triggers,
         "speaker_mismatch": bool(i["speaker_mismatch"]),
         "created_at": i["created_at"],
         "acknowledged": bool(i["acknowledged"]),
         "report_path": i.get("report_path"),
     }
+
+
+def _json_field(raw) -> dict:
+    """Best-effort decode of a stored JSON text column."""
+    if not raw:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    try:
+        return json.loads(raw)
+    except Exception:
+        return {}
 
 
 # ── Audio decoding helpers ─────────────────────────────────────────────────
@@ -374,13 +392,23 @@ async def detect_audio(
 async def analyze_file(
     file: UploadFile | None = File(None),
     role: str = Query("adult"),
+    caller: str = Form(""),
+    origin: str = Form(""),
+    txn_value: float = Form(0.0),
+    txn_category: str = Form(""),
+    known_contact: str = Form(""),
+    prior_flags: int = Form(0),
 ):
     """
     Run the full sliding-window pipeline on an uploaded file.
 
     Returns peak score, risk band, per-window table, and a recommendation.
+    Optional form fields feed contextual enrichment (opt-in, see settings):
+    caller, origin, txn_value, txn_category, known_contact ("", "true", "false"),
+    prior_flags.
     """
-    from app.engine.risk import risk_band, recommendation
+    from app.engine.risk import risk_band, recommendation, recommended_actions
+    from app.context.enrichment import CallContext, enrich_score
 
     if file is None:
         return JSONResponse(status_code=422, content={"error": "No audio file provided."})
@@ -396,11 +424,30 @@ async def analyze_file(
             f"peak={peak:.4f} in {elapsed:.0f}ms"
         )
         band = risk_band(peak, role)
+
+        # Contextual enrichment (opt-in; fails open to unchanged when disabled)
+        kc = None if known_contact.strip() == "" else known_contact.strip().lower() == "true"
+        ctx = CallContext.from_mapping(
+            {
+                "caller": caller,
+                "origin": origin,
+                "txn_value": txn_value,
+                "txn_category": txn_category,
+                "known_contact": kc,
+                "prior_flags": prior_flags if prior_flags > 0 else None,
+            }
+        )
+        ctx_score, ctx_detail = enrich_score(peak, ctx, role)
+
         return {
-            "peak_score": round(peak, 4),
-            "risk_band": band,
+            "peak_score": round(ctx_score, 4),
+            "risk_band": risk_band(ctx_score, role),
             "windows_analyzed": count,
             "recommendation": recommendation(band, role),
+            "recommended_actions": recommended_actions(
+                risk_band(ctx_score, role), role
+            ),
+            "context": ctx_detail if ctx.provided else None,
             "windows": windows,
         }
     except Exception as e:
@@ -461,6 +508,57 @@ async def ack_incident(iid: str):
         return JSONResponse(status_code=404, content={"error": "Incident not found"})
     store.ack_incident(iid)
     return {"ok": True, "id": iid, "acknowledged": True}
+
+
+@app.post("/api/incidents/{iid}/escalate", tags=["incidents"])
+async def escalate_incident(iid: str, note: str = Form("")):
+    """
+    Escalate a confirmed-fraud incident: record the caller in the reputation
+    ledger and re-fire the escalation webhook (e.g. DoT DIP / operator receiver)
+    with escalation=true. SOP prompts (call-back / MFA) are operator actions;
+    this endpoint handles the supervisor-escalation leg concretely.
+    """
+    from app import store
+    from app.mitigation.alerts import _send_with_retry
+
+    inc = store.get_incident(iid)
+    if inc is None:
+        return JSONResponse(status_code=404, content={"error": "Incident not found"})
+
+    ctx = _json_field(inc.get("context_json"))
+    caller = (ctx.get("caller") if isinstance(ctx, dict) else None) or ""
+    flag_count = store.bump_caller_flags(caller) if caller else 0
+
+    targets = [u for u in (settings.webhook_url, settings.chakshu_dip_webhook_url) if u]
+    payload = {
+        "channel": "incident_escalation",
+        "flow": "escalated_fraud",
+        "incident_id": iid,
+        "call_id": inc.get("session_id"),
+        "note": note,
+        "escalation": "Operator-level escalation — supervisor review required",
+        "caller_flag_count": flag_count,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S IST"),
+    }
+    for url in targets:
+        await _send_with_retry("EscalationWebhook", url, json_payload=payload)
+
+    return {
+        "ok": True,
+        "id": iid,
+        "escalated": True,
+        "webhooks": len(targets),
+        "caller_flag_count": flag_count,
+    }
+
+
+@app.get("/api/workflows", tags=["incidents"])
+async def get_workflows():
+    """Return the active mitigation workflow configuration (editable JSON)."""
+    from app.mitigation.workflows import get_workflow_config, _default_path
+    cfg = get_workflow_config()
+    cfg["active_path"] = _default_path() if settings.workflows_path else "bundled_defaults"
+    return cfg
 
 
 @app.get("/api/incidents/{iid}/report", tags=["incidents", "forensics"])

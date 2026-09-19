@@ -33,7 +33,11 @@ CREATE TABLE IF NOT EXISTS sessions (
     max_score           REAL NOT NULL DEFAULT 0.0,
     avg_score           REAL NOT NULL DEFAULT 0.0,
     last_score          REAL NOT NULL DEFAULT 0.0,
-    enterprise_verified INTEGER NOT NULL DEFAULT 0
+    enterprise_verified INTEGER NOT NULL DEFAULT 0,
+    caller              TEXT NOT NULL DEFAULT '',
+    origin              TEXT NOT NULL DEFAULT '',
+    txn_value           REAL NOT NULL DEFAULT 0.0,
+    context_json        TEXT NOT NULL DEFAULT '{}'
 );
 
 CREATE TABLE IF NOT EXISTS windows (
@@ -60,6 +64,8 @@ CREATE TABLE IF NOT EXISTS incidents (
     language         TEXT NOT NULL DEFAULT 'auto',
     severity         TEXT NOT NULL DEFAULT 'high',
     score            REAL NOT NULL DEFAULT 0.0,
+    base_score       REAL NOT NULL DEFAULT 0.0,
+    context_json     TEXT NOT NULL DEFAULT '{}',
     triggers         TEXT NOT NULL DEFAULT '[]',
     speaker_mismatch INTEGER NOT NULL DEFAULT 0,
     created_at       TEXT NOT NULL,
@@ -106,7 +112,28 @@ CREATE TABLE IF NOT EXISTS block_anchors (
     anchored_at   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_block_anchors_call ON block_anchors(call_id);
+
+CREATE TABLE IF NOT EXISTS context_contacts (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    label         TEXT NOT NULL UNIQUE,
+    match_pattern TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS caller_reputation (
+    caller      TEXT PRIMARY KEY,
+    flag_count  INTEGER NOT NULL DEFAULT 0,
+    first_seen  TEXT,
+    last_seen   TEXT
+);
 """
+
+
+def _ensure_column(conn, table: str, col: str, ddl: str) -> None:
+    """Add a column to an existing table in place (no data loss)."""
+    existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if col not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
 
 
 def init_db() -> None:
@@ -115,6 +142,13 @@ def init_db() -> None:
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(_SCHEMA)
+        # In-place migration for databases created before the context columns.
+        _ensure_column(conn, "sessions", "caller", "caller TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "sessions", "origin", "origin TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "sessions", "txn_value", "txn_value REAL NOT NULL DEFAULT 0.0")
+        _ensure_column(conn, "sessions", "context_json", "context_json TEXT NOT NULL DEFAULT '{}'")
+        _ensure_column(conn, "incidents", "base_score", "base_score REAL NOT NULL DEFAULT 0.0")
+        _ensure_column(conn, "incidents", "context_json", "context_json TEXT NOT NULL DEFAULT '{}'")
         conn.commit()
         logger.info(f"Storage initialized: {_DB_PATH}")
     finally:
@@ -155,14 +189,33 @@ def _fetchone(sql: str, params: tuple = ()) -> Optional[sqlite3.Row]:
 
 # ── Sessions ────────────────────────────────────────────────────────────────
 
-def create_session(call_id: str, role: str = "adult", language: str = "auto") -> None:
+def create_session(
+    call_id: str,
+    role: str = "adult",
+    language: str = "auto",
+    caller: str = "",
+    origin: str = "",
+    txn_value: float = 0.0,
+    context_json: str = "{}",
+) -> None:
     _execute(
-        "INSERT INTO sessions (call_id, role, language, started_at) VALUES (?, ?, ?, datetime('now')) "
+        "INSERT INTO sessions (call_id, role, language, started_at, caller, origin, "
+        "txn_value, context_json) VALUES (?, ?, ?, datetime('now'), ?, ?, ?, ?) "
         "ON CONFLICT(call_id) DO UPDATE SET "
         "role=excluded.role, language=excluded.language, started_at=datetime('now'), "
         "ended_at=NULL, status='active', window_count=0, max_score=0.0, avg_score=0.0, "
-        "last_score=0.0, enterprise_verified=0",
-        (call_id, role or "adult", language or "auto"),
+        "last_score=0.0, enterprise_verified=0, caller=excluded.caller, "
+        "origin=excluded.origin, txn_value=excluded.txn_value, "
+        "context_json=excluded.context_json",
+        (
+            call_id,
+            role or "adult",
+            language or "auto",
+            str(caller or ""),
+            str(origin or ""),
+            round(float(txn_value or 0.0), 2),
+            str(context_json or "{}"),
+        ),
     )
 
 
@@ -284,10 +337,13 @@ def add_incident(
     score: float,
     triggers: List[str],
     speaker_mismatch: bool,
+    base_score: float = 0.0,
+    context_json: str = "{}",
 ) -> None:
     _execute(
         "INSERT OR REPLACE INTO incidents (id, session_id, role, language, severity, "
-        "score, triggers, speaker_mismatch, created_at) VALUES (?,?,?,?,?,?,?,?,datetime('now'))",
+        "score, base_score, context_json, triggers, speaker_mismatch, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))",
         (
             iid,
             session_id,
@@ -295,6 +351,8 @@ def add_incident(
             language or "auto",
             severity or "high",
             round(float(score), 4),
+            round(float(base_score), 4),
+            str(context_json or "{}"),
             json.dumps(triggers or []),
             int(bool(speaker_mismatch)),
         ),
@@ -333,6 +391,78 @@ def register_speaker(label: str, language: str, embedding_bytes: bytes) -> None:
 def get_speaker_embedding(label: str) -> Optional[bytes]:
     row = _fetchone("SELECT embedding FROM speakers WHERE label=?", (label,))
     return row["embedding"] if row and row["embedding"] is not None else None
+
+
+# ── Contextual Enrichment (contacts + caller reputation) ────────────────
+
+def upsert_context_contact(label: str, match_pattern: str) -> None:
+    """Register a known contact (label + match pattern) for contact checks."""
+    _execute(
+        "INSERT INTO context_contacts (label, match_pattern, created_at) "
+        "VALUES (?,?,datetime('now')) "
+        "ON CONFLICT(label) DO UPDATE SET match_pattern=excluded.match_pattern, "
+        "created_at=datetime('now')",
+        (label or "", match_pattern or ""),
+    )
+
+
+def list_context_contacts() -> List[Dict[str, Any]]:
+    rows = _fetchall("SELECT label, match_pattern FROM context_contacts ORDER BY label ASC")
+    return [dict(r) for r in rows]
+
+
+def contact_match(caller: str) -> Optional[bool]:
+    """
+    True  -> caller matches a registered contact
+    False -> a contact list is configured but caller does not match
+    None  -> no contacts configured (signal disabled, fail-open)
+    """
+    if not caller:
+        return None
+    rows = _fetchall("SELECT match_pattern FROM context_contacts")
+    if not rows:
+        return None
+    for r in rows:
+        pattern = (r["match_pattern"] or "").strip()
+        if pattern and (pattern == caller or pattern in caller or caller in pattern):
+            return True
+    return False
+
+
+def get_caller_flags(caller: str) -> int:
+    if not caller:
+        return 0
+    row = _fetchone("SELECT flag_count FROM caller_reputation WHERE caller=?", (caller,))
+    return int(row["flag_count"]) if row else 0
+
+
+def bump_caller_flags(caller: str) -> int:
+    """Increment a caller's fraud-flag count (used on validated escalation)."""
+    if not caller:
+        return 0
+    conn = _connect()
+    try:
+        with _WRITE_LOCK:
+            row = conn.execute(
+                "SELECT flag_count, first_seen FROM caller_reputation WHERE caller=?", (caller,)
+            ).fetchone()
+            if row:
+                new_count = int(row["flag_count"]) + 1
+                conn.execute(
+                    "UPDATE caller_reputation SET flag_count=?, last_seen=datetime('now') WHERE caller=?",
+                    (new_count, caller),
+                )
+            else:
+                new_count = 1
+                conn.execute(
+                    "INSERT INTO caller_reputation (caller, flag_count, first_seen, last_seen) "
+                    "VALUES (?, 1, datetime('now'), datetime('now'))",
+                    (caller,),
+                )
+            conn.commit()
+        return new_count
+    finally:
+        conn.close()
 
 
 # ── Blockchain (report anchoring ledger) ───────────────────────────────────

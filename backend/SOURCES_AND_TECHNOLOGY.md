@@ -42,6 +42,10 @@ the on-device and the cloud pipeline.
 | Email | aiosmtplib | MIT | Gmail app-password email alerts |
 | Escalation | DoT Sanchar Saathi / Chakshu / DIP hand-off (optional webhook) | ours (MIT) — feeds citizen-facing DoT portals; **no public API** | Suspected-fraud metadata routing (`CHAKSHU_DIP_WEBHOOK_URL`), complementing the post-fraud I4C/1930 path |
 | HTTP alerts | httpx | BSD-3-Clause | Telegram / ntfy.sh / Fast2SMS / webhook |
+| SDK | `voiceshield_sdk` (sync + async, built on httpx) | MIT (ours) | First-party REST client + live WebSocket call session; API contract in `sdk/voiceshield.proto` (proto3) |
+| Workflows | Configurable mitigation rules (`backend/workflows.json`, stdlib `json`) | MIT (ours) | Bank/enterprise/gov automated response actions + channels per role × risk band, no code deploy |
+| Context | Call-context enrichment (caller reputation, known-contact store) | MIT (ours) | Pre-threshold risk adjustment for transactions (opt-in, fail-open) |
+| Edge | Edge inference worker (`deploy/edge/vs_edge.py`, stdlib CLI) | MIT (ours) | On-device/edge inference proof — no GPU or cloud dependency |
 | Settings | pydantic-settings | MIT | `backend/.env` config binding |
 | DB | Neon PostgreSQL (optional) / in-memory store | MIT (client) | Incident & session telemetry |
 | Testing | pytest + pytest-asyncio | MIT | Unit tests |
@@ -61,8 +65,8 @@ the on-device and the cloud pipeline.
 | Docker / Kubernetes | Reproducible deployment | Apache-2.0 |
 | Prometheus + Grafana | Observability of false-positive rates | Apache-2.0 |
 | Public chain anchoring (Ethereum/Polygon) | Immutable I4C hand-off | Apache-2.0 tooling |
-| gRPC (grpcio) | High-perf SDK for banking/telecom integration | Apache-2.0 |
-| SDK bindings (Python/JS) | First-party client SDKs | Apache-2.0 |
+| gRPC server + bindings (grpcio) | Ship a real gRPC server/service from the shipped `voiceshield.proto` contract (proto contract is in-repo today) | Apache-2.0 |
+| SDK bindings (JS/Swift) | Python SDK shipped (`backend/sdk`); port to TS/JS + Swift for banking apps | Apache-2.0 |
 | Vosk / faster-whisper | On-device ASR for edge/DPDP posture | Apache-2.0 / MIT |
 
 ---

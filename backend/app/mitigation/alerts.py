@@ -33,6 +33,8 @@ async def dispatch_alerts(
     score: float,
     role: str,
     action_type: str,
+    context: Optional[dict] = None,
+    recommended_actions: Optional[list] = None,
 ) -> None:
     """
     Dispatch alerts to all configured channels concurrently.
@@ -44,6 +46,8 @@ async def dispatch_alerts(
         score: Fused synthetic score.
         role: Session role ('adult' or 'child').
         action_type: Mitigation action type ('child_shield' or 'adult_alert').
+        context: Optional contextual-enrichment detail (see app.context.enrichment).
+        recommended_actions: Optional pre-transaction verification prompts.
     """
     timestamp = datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S IST")
     priority = "urgent" if role == "child" else "high"
@@ -56,8 +60,12 @@ async def dispatch_alerts(
         f"Role: {role.upper()}\n"
         f"Action: {action_type}\n"
         f"Time: {timestamp}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━"
     )
+    if recommended_actions:
+        message += "Verify BEFORE proceeding:\n"
+        for act in recommended_actions:
+            message += f"  • {act}\n"
+    message += f"━━━━━━━━━━━━━━━━━━━━━━"
 
     # Fire all configured channels concurrently
     tasks = []
@@ -92,15 +100,20 @@ async def dispatch_alerts(
         ))
 
     if settings.webhook_url:
+        webhook_payload: dict = {
+            "call_id": call_id,
+            "score": score,
+            "role": role,
+            "action": action_type,
+            "timestamp": timestamp,
+        }
+        if context is not None:
+            webhook_payload["context"] = context
+        if recommended_actions is not None:
+            webhook_payload["recommended_actions"] = recommended_actions
         tasks.append(send_webhook(
             settings.webhook_url,
-            {
-                "call_id": call_id,
-                "score": score,
-                "role": role,
-                "action": action_type,
-                "timestamp": timestamp,
-            },
+            webhook_payload,
         ))
 
     # ── DoT Sanchar Saathi / Chakshu / DIP escalation (suspected fraud) ───

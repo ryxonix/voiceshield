@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "description": "VoiceShield AI — configurable mitigation workflows. Operators (banks, enterprises, government agencies) edit band_min / actions / channels here without a code deploy. Override the path with WORKFLOWS_PATH.",
+  "rules": [
+    {
+      "role": "child",
+      "band_min": "critical",
+      "actions": ["auto_mute", "notify_guardian_and_authorities", "escalate_supervisor"],
+      "channels": ["telegram", "sms", "email", "webhook"]
+    },
+    {
+      "role": "child",
+      "band_min": "high",
+      "actions": ["auto_mute", "verify_caller_identity"],
+      "channels": ["telegram", "webhook"]
+    },
+    {
+      "role": "adult",
+      "band_min": "critical",
+      "actions": ["warn_user", "require_call_back", "require_mfa", "escalate_supervisor"],
+      "channels": ["telegram", "email", "webhook"]
+    },
+    {
+      "role": "adult",
+      "band_min": "high",
+      "actions": ["warn_user", "require_secondary_verification"],
+      "channels": ["telegram", "webhook"]
+    },
+    {
+      "role": "adult",
+      "band_min": "medium",
+      "actions": ["flag_manual_review"],
+      "channels": ["webhook"]
+    }
+  ]
+}

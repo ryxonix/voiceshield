@@ -23,7 +23,9 @@ from app.engine.speaker import (
     is_speaker_mismatch,
 )
 from app.engine.session import session_manager
-from app.engine.risk import threshold_for
+from app.engine.risk import threshold_for, risk_band, recommended_actions
+from app.context.enrichment import CallContext, enrich_score
+from app.mitigation.workflows import workflow_detail
 from app.mitigation.router import evaluate_mitigation
 from app import store
 
@@ -41,6 +43,10 @@ async def stream_endpoint(
     role: str = Query("adult"),
     language: str = Query("auto"),
     speaker: str = Query(""),
+    caller: str = Query(""),
+    origin: str = Query(""),
+    txn_value: float = Query(0.0),
+    txn_category: str = Query(""),
 ):
     """
     WebSocket endpoint for real-time audio deepfake detection.
@@ -57,11 +63,25 @@ async def stream_endpoint(
         role: Session role — 'adult' (threshold 0.85) or 'child' (threshold 0.70).
         language: Hint used for logging/telemetry (auto / en / hi / kn ...).
         speaker: Registered speaker label for cross-session voice-print checks.
+        caller: Optional caller identifier for contextual enrichment.
+        origin: Optional call origin — telecom / voip / enterprise / unknown.
+        txn_value: Optional transaction value (INR) for high-value enrichment.
+        txn_category: Optional transaction category (e.g. fund_transfer).
     """
     await websocket.accept()
     logger.info(f"WebSocket connected: call_id={call_id}, role={role}, language={language}, speaker={speaker or '-'}")
 
     session_id = call_id
+
+    # Contextual enrichment metadata (opt-in, fail-open)
+    ctx = CallContext.from_mapping(
+        {
+            "caller": caller,
+            "origin": origin,
+            "txn_value": txn_value,
+            "txn_category": txn_category,
+        }
+    )
 
     # Dhwani (trained deepfake detector) requires full 3-second windows for a
     # meaningful score, so stream on 3s windows / 1s hop when it is available.
@@ -91,7 +111,15 @@ async def stream_endpoint(
     step_ms = int(round(buffer_hop * 1000.0 / settings.sample_rate))
     threshold = threshold_for(role)
 
-    store.create_session(call_id, role, language)
+    store.create_session(
+        call_id,
+        role,
+        language,
+        caller=ctx.caller,
+        origin=ctx.origin,
+        txn_value=ctx.txn_value,
+        context_json=json.dumps(ctx.to_dict()),
+    )
 
     try:
         while True:
@@ -179,6 +207,11 @@ async def stream_endpoint(
                 ):
                     incident_created = True
                     severity = "critical" if role == "child" else "high"
+                    band = risk_band(score, role)
+                    actions = recommended_actions(band, role)
+                    wf = workflow_detail(band, role)
+                    enriched_score, ctx_detail = enrich_score(score, ctx, role)
+                    ctx_sent = ctx_detail if ctx_detail.get("applied") else None
                     if role == "child":
                         action = "child_shield"
                         message = (
@@ -203,6 +236,10 @@ async def stream_endpoint(
                             "threshold": threshold,
                             "role": role,
                             "message": message,
+                            "risk_band": band,
+                            "recommended_actions": actions,
+                            "workflow": wf.get("matched_rule", {}),
+                            "context": ctx_sent,
                             "call_id": call_id,
                             "timestamp_ist": datetime.now(IST).isoformat(),
                         }
@@ -226,13 +263,15 @@ async def stream_endpoint(
                         role=role,
                         language=language,
                         severity=severity,
-                        score=score,
+                        score=enriched_score,
+                        base_score=score,
+                        context_json=json.dumps(ctx_sent if ctx_sent else ctx.to_dict()),
                         triggers=triggers,
                         speaker_mismatch=bool(event["speaker_mismatch"]),
                     )
                     # Fire-and-forget external alert dispatch (Telegram/ntfy/Resend...)
                     try:
-                        await evaluate_mitigation(score, role, call_id)
+                        await evaluate_mitigation(score, role, call_id, context=ctx_sent)
                     except Exception as e:  # noqa: BLE001
                         logger.warning(f"Mitigation routing failed: {e}")
 
