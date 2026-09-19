@@ -103,6 +103,28 @@ async def dispatch_alerts(
             },
         ))
 
+    # ── DoT Sanchar Saathi / Chakshu / DIP escalation (suspected fraud) ───
+    # Optional downstream hand-off: posts flagged-call metadata to an
+    # operator-side receiver that routes it into Chakshu / the Digital
+    # Intelligence Platform (DIP) for network-level action. Distinct from the
+    # post-fraud I4C/1930 flow embedded in the forensic PDF. Skipped unless
+    # CHAKSHU_DIP_WEBHOOK_URL is configured.
+    if settings.chakshu_dip_webhook_url:
+        tasks.append(send_webhook(
+            settings.chakshu_dip_webhook_url,
+            {
+                "channel": "chakshu_dip",
+                "flow": "suspected_fraud",
+                "call_id": call_id,
+                "score": score,
+                "role": role,
+                "action": action_type,
+                "timestamp": timestamp,
+                "escalation": "Route flagged-call metadata to DoT DIP / Chakshu "
+                              "(Sanchar Saathi) for network-level action.",
+            },
+        ))
+
     if tasks:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for i, result in enumerate(results):

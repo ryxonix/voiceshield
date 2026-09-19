@@ -1,6 +1,18 @@
 """
-VoiceShield AI — Multi-Language Protocol Merger
-Merges per-language ASVspoof protocol files into a single weighted training set.
+VoiceShield AI — Multi-Language Protocol Merger (leak-free)
+
+Merges per-language ASVspoof protocol files into a single train/val split.
+
+IMPORTANT FIX (v2):
+  The older version multiplied each line by a language weight and then
+  split the *duplicated* list — so the SAME audio file could land in
+  BOTH train and val (data leakage, meaningless EER). This version:
+
+    1. de-duplicates by FILE ID first,
+    2. splits unique files into train/val (sorted, stratified split),
+    3. ONLY THEN oversamples the TRAIN lines by language weight.
+
+  Result: a file can never appear in both splits.
 
 Weighting:
     hindi   -> 3x  (dominant Indian telecom language)
@@ -12,9 +24,19 @@ import os
 import argparse
 import random
 import logging
+from collections import OrderedDict
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def _split_deterministic(names, seed, val_fraction):
+    """Deterministic 85/15 split over a sorted unique-name list."""
+    rng = random.Random(seed)
+    ordered = sorted(names)
+    rng.shuffle(ordered)
+    cut = int(len(ordered) * (1.0 - val_fraction))
+    return set(ordered[:cut]), set(ordered[cut:])
 
 
 def merge_protocols(
@@ -26,18 +48,14 @@ def merge_protocols(
     seed: int = 42,
 ):
     """
-    Merge multiple per-language protocol files into a single train/val split.
+    Merge multiple per-language protocol files into a single leak-free
+    train/val split.
 
-    Args:
-        data_dir:    Root directory containing per-language wav files + protocols.
-        languages:   List of language names (e.g. ['hindi', 'english', 'kannada']).
-        weights:     Dict mapping language -> repeat multiplier.
-        output_file: Base path for output (will produce _train.txt and _val.txt).
-        val_split:   Fraction reserved for validation.
-        seed:        RNG seed for reproducibility.
+    A file id is ONLY ever in train or ONLY ever in val.
     """
-    random.seed(seed)
-    all_lines = []
+    # dict: file_id -> line (first occurrence wins; ids are unique per protocol)
+    unique = OrderedDict()
+    per_lang = {}
 
     for lang in languages:
         proto_path = os.path.join(data_dir, f"{lang}_protocol.txt")
@@ -45,53 +63,86 @@ def merge_protocols(
             logger.warning(f"Protocol file not found: {proto_path} — skipping")
             continue
 
-        with open(proto_path) as f:
+        with open(proto_path, encoding="utf-8") as f:
             lines = [l.strip() for l in f if l.strip()]
 
-        multiplier = weights.get(lang, 1)
-        weighted = lines * multiplier
-        random.shuffle(weighted)
-        all_lines.extend(weighted)
-        logger.info(f"  {lang:10s}: {len(lines)} samples × {multiplier}x = {len(weighted)} entries")
+        by_id = OrderedDict()
+        for line in lines:
+            parts = line.split()
+            if len(parts) >= 2:
+                by_id.setdefault(parts[1], line)
+        per_lang[lang] = by_id
+        logger.info(f"  {lang:10s}: {len(lines)} protocol lines -> {len(by_id)} unique files")
 
-    random.shuffle(all_lines)
+    # ── Global deduped file-id universe ────────────────────────────────
+    all_ids = []
+    for by_id in per_lang.values():
+        for fid, line in by_id.items():
+            if fid not in unique:
+                unique[fid] = line
+                all_ids.append(fid)
+    logger.info(f"Unique files across languages: {len(all_ids)}")
 
-    split_idx = int(len(all_lines) * (1 - val_split))
-    train_lines = all_lines[:split_idx]
-    val_lines   = all_lines[split_idx:]
+    if not all_ids:
+        logger.error("No protocol files found — aborting.")
+        return None, None
+
+    # ── File-level split: no file appears in both splits ───────────────
+    train_ids, val_ids = _split_deterministic(all_ids, seed, val_split)
+    logger.info(f"Split at FILE level: {len(train_ids)} train / {len(val_ids)} val")
+
+    # ── Build split sets per language + label summary ──────────────────
+    def label_of(fid):
+        return unique[fid].split()[-1] if unique[fid].split() else "unknown"
+
+    def count(_ids):
+        bon = sum(1 for i in _ids if label_of(i) == "bonafide")
+        return len(_ids), bon, len(_ids) - bon
+
+    n_tr, b_tr, s_tr = count(train_ids)
+    n_va, b_va, s_va = count(val_ids)
+    logger.info(
+        f"  Train : {n_tr} (bonafide {b_tr}, spoof {s_tr}) | "
+        f"Val: {n_va} (bonafide {b_va}, spoof {s_va})"
+    )
+
+    # ── Oversample TRAIN only by language weight (val stays pure) ──────
+    weighted_train = []
+    for lang, by_id in per_lang.items():
+        mult = weights.get(lang, 1)
+        ids = [fid for fid in train_ids if fid in by_id]
+        weighted_train.extend(by_id[fid] for fid in ids * mult)
+        logger.info(f"  {lang:10s}: {len(ids)} train files x {mult} = {len(ids) * mult} train lines")
+
+    random.Random(seed).shuffle(weighted_train)
+
+    val_lines = [unique[fid] for fid in sorted(val_ids)]
 
     train_out = output_file + "_train.txt"
-    val_out   = output_file + "_val.txt"
-
-    with open(train_out, "w") as f:
-        f.write("\n".join(train_lines))
-    with open(val_out, "w") as f:
+    val_out = output_file + "_val.txt"
+    with open(train_out, "w", encoding="utf-8") as f:
+        f.write("\n".join(weighted_train))
+    with open(val_out, "w", encoding="utf-8") as f:
         f.write("\n".join(val_lines))
 
-    bonafide_train = sum(1 for l in train_lines if "bonafide" in l)
-    bonafide_val   = sum(1 for l in val_lines   if "bonafide" in l)
-
-    logger.info(f"\nMerged protocol written:")
-    logger.info(f"  Train : {len(train_lines)} samples ({bonafide_train} bonafide, {len(train_lines)-bonafide_train} spoof)")
-    logger.info(f"  Val   : {len(val_lines)}   samples ({bonafide_val} bonafide, {len(val_lines)-bonafide_val} spoof)")
-    logger.info(f"  Files : {train_out}")
-    logger.info(f"          {val_out}")
-
+    logger.info(f"\nLeak-free merged protocols written:")
+    logger.info(f"  Train : {train_out} ({len(weighted_train)} lines, {len(train_ids)} unique files)")
+    logger.info(f"  Val   : {val_out} ({len(val_lines)} lines, {len(val_ids)} unique files)")
     return train_out, val_out
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Merge per-language protocols")
-    parser.add_argument("--data_dir",  type=str, default="data/indic")
-    parser.add_argument("--output",    type=str, default="data/indic/merged")
+    parser = argparse.ArgumentParser(description="Merge per-language protocols (leak-free)")
+    parser.add_argument("--data_dir", type=str, default="data/indic")
+    parser.add_argument("--output", type=str, default="data/indic/merged")
     parser.add_argument("--val_split", type=float, default=0.15)
-    parser.add_argument("--seed",      type=int,   default=42)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     languages = ["hindi", "english", "kannada"]
-    weights   = {"hindi": 3, "english": 3, "kannada": 2}
+    weights = {"hindi": 3, "english": 3, "kannada": 2}
 
-    logger.info("Language weighting:")
+    logger.info("Language weighting (train-only oversampling):")
     for lang in languages:
         logger.info(f"  {lang:10s}: {weights[lang]}x")
 

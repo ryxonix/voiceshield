@@ -4,6 +4,14 @@
 !.env.example
 *.local
 
+# Cryptographic keys & demo shadow anchors (never commit)
+*.key
+*.pem
+*.sk
+backend/reports/keys/
+shadow_*.json
+gateway/wallet/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -48,12 +56,14 @@ backend/data/
 data/
 backend/models/dhwani/
 models/dhwani/
+backend/models/sih_cloud_xlsr/
 *.onnx.metadata
 .cache/
 **/__pycache__/
 
 # Temporary repositories / clones
 temp_repo/
+voiceshield_cloud/
 
 # OS / Editor
 .DS_Store

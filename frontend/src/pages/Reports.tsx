@@ -1,26 +1,28 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Breadcrumbs, PageHeader, Divider, Sparkline, apiBase, btn } from '../components/ui'
 import { SessionCard } from '../components/SessionCard'
+import { useT, useI18n } from '../i18n'
 
 type Tab = 'sessions' | 'blockchain' | 'analyze' | 'speakers'
 
 export default function Reports({ initialTab = 'sessions' }: { initialTab?: Tab }) {
+  const t = useT()
   const [tab, setTab] = useState<Tab>(initialTab as Tab)
   useEffect(() => setTab(initialTab as Tab), [initialTab])
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: 'sessions', label: 'Session forensics' },
-    { id: 'blockchain', label: 'Blockchain ledger' },
-    { id: 'analyze', label: 'File analysis' },
-    { id: 'speakers', label: 'Speaker enrollment' },
+    { id: 'sessions', label: t('Session forensics') },
+    { id: 'blockchain', label: t('Report blockchain') },
+    { id: 'analyze', label: t('File analysis') },
+    { id: 'speakers', label: t('Speaker enrollment') },
   ]
 
   return (
     <article>
-      <Breadcrumbs trail={['Forensics', tabs.find((t) => t.id === tab)?.label || '']} />
+      <Breadcrumbs trail={[t('Forensics'), tabs.find((t) => t.id === tab)?.label || '']} />
       <PageHeader
-        title="Forensics"
-        meta="Reconstruct any monitored call window-by-window, run batch analysis on recordings, or enroll trusted voices for cross-session identity checks."
+        title={t('Forensics')}
+        meta={t('Reconstruct any monitored call window-by-window, run batch analysis on recordings, or enroll trusted voices for cross-session identity checks.')}
         actions={
           <div className="flex rounded-full border border-[#E4E4E7] bg-white p-0.5">
             {tabs.map((t) => (
@@ -50,6 +52,7 @@ export default function Reports({ initialTab = 'sessions' }: { initialTab?: Tab 
 /* ------------------------------ Sessions tab ------------------------------- */
 
 function Sessions() {
+  const { t, tVerdict } = useI18n()
   const [sessions, setSessions] = useState<any[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [windows, setWindows] = useState<any[]>([])
@@ -73,7 +76,7 @@ function Sessions() {
     <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
       <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
         {sessions.length === 0 && (
-          <p className="text-[13.5px] text-zinc-500">No sessions recorded yet — run a live monitor session first.</p>
+          <p className="text-[13.5px] text-zinc-500">{t('No sessions recorded yet — run a live monitor session first.')}</p>
         )}
         {sessions.map((s) => (
           <SessionCard key={s.id} s={s} active={selected === s.id} onClick={() => setSelected(s.id)} />
@@ -84,7 +87,7 @@ function Sessions() {
         {selected ? (
           <div className="card p-6">
             <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-              <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">Window timeline</h3>
+              <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">{t('Window timeline')}</h3>
               <div className="flex items-center gap-3">
                 <span className="font-mono text-[12px] text-zinc-500">{selected}</span>
                 <a
@@ -92,7 +95,7 @@ function Sessions() {
                   download
                   className={btn('btn-primary')}
                 >
-                  Download report
+                  {t('Download report')}
                 </a>
               </div>
             </div>
@@ -104,13 +107,13 @@ function Sessions() {
                 <thead>
                   <tr className="border-b border-[#E4E4E7] text-[11px] uppercase tracking-wide text-zinc-500">
                     <th className="py-2 pr-3 font-semibold">t (ms)</th>
-                    <th className="py-2 pr-3 font-semibold">Score</th>
+                    <th className="py-2 pr-3 font-semibold">{t('Score')}</th>
                     <th className="py-2 pr-3 font-semibold">Model</th>
                     <th className="py-2 pr-3 font-semibold">XAI</th>
                     <th className="py-2 pr-3 font-semibold">Jitter %</th>
                     <th className="py-2 pr-3 font-semibold">Shimmer %</th>
                     <th className="py-2 pr-3 font-semibold">φ cont</th>
-                    <th className="py-2 font-semibold">Verdict</th>
+                    <th className="py-2 font-semibold">{t('Verdict')}</th>
                   </tr>
                 </thead>
                 <tbody className="font-mono">
@@ -128,18 +131,18 @@ function Sessions() {
                         <td className="py-1.5 pr-3 text-zinc-500">{w.jitter_pct?.toFixed(3)}</td>
                         <td className="py-1.5 pr-3 text-zinc-500">{w.shimmer_pct?.toFixed(3)}</td>
                         <td className="py-1.5 pr-3 text-zinc-500">{w.phase_continuity?.toFixed(2)}</td>
-                        <td className="py-1.5 text-zinc-800">{w.verdict}</td>
+                        <td className="py-1.5 text-zinc-800">{tVerdict(w.verdict)}</td>
                       </tr>
                     ))}
                 </tbody>
               </table>
-              {windows.length === 0 && <p className="mt-2 text-[13px] text-zinc-500">No windows persisted for this session.</p>}
+              {windows.length === 0 && <p className="mt-2 text-[13px] text-zinc-500">{t('No windows persisted for this session.')}</p>}
             </div>
           </div>
         ) : (
           <div className="card flex h-full items-center justify-center p-10 text-center">
             <p className="max-w-xs text-[13.5px] leading-relaxed text-zinc-500">
-              Select a session on the left to reconstruct its full per-window analysis timeline.
+              {t('Select a session on the left to reconstruct its full per-window analysis timeline.')}
             </p>
           </div>
         )}
@@ -151,6 +154,7 @@ function Sessions() {
 /* ------------------------------ Blockchain tab ----------------------------- */
 
 function BlockchainLedger() {
+  const t = useT()
   const [status, setStatus] = useState<any>(null)
   const [results, setResults] = useState<Record<string, any>>({})
   const [checking, setChecking] = useState<Record<string, boolean>>({})
@@ -182,11 +186,11 @@ function BlockchainLedger() {
       <div className="card p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">Report blockchain</h3>
+            <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">{t('Report blockchain')}</h3>
             <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-zinc-500">
-              Every forensic PDF is anchored via SHA-256 + proof-of-work to an append-only hash chain. Each block commits
-              the report hash and a Merkle root of the session score timeline, linked to its predecessor — so any
-              modification after the fact is cryptographically detectable.
+              {t(
+                'Every forensic PDF is anchored via SHA-256 + proof-of-work to an append-only hash chain. Each block commits the report hash and a Merkle root of the session score timeline, linked to its predecessor — so any modification after the fact is cryptographically detectable.'
+              )}
             </p>
           </div>
           <span
@@ -196,22 +200,40 @@ function BlockchainLedger() {
               color: status?.valid ? '#3f6f4f' : '#DC2626',
             }}
           >
-            {status ? (status.valid ? `chain OK · height ${status.height}` : 'chain INVALID') : '…'}
+            {status ? (status.valid ? t('chain OK · height {h}', { h: status.height }) : t('chain INVALID')) : '…'}
           </span>
         </div>
 
         {status && (
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Metric label="Height" value={status.height} />
-            <Metric label="Difficulty" value={status.difficulty} />
+            <Metric label={t('Height')} value={status.height} />
+            <Metric label={t('Difficulty')} value={status.difficulty} />
             <Metric label="Genesis" value={status.genesis.slice(0, 12) + '…'} />
             <Metric label="Latest" value={status.latest.slice(0, 12) + '…'} />
+          </div>
+        )}
+
+        {status?.external_anchor && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#F1EEE9] pt-3 text-[12px]">
+            <span className="font-semibold text-zinc-700">{t('External anchor (NBF-Fabric)')}</span>
+            <span
+              className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+              style={{
+                background: status.external_anchor.enabled ? '#E7F1EA' : '#F1EEE9',
+                color: status.external_anchor.enabled ? '#3f6f4f' : '#71717A',
+              }}
+            >
+              {status.external_anchor.enabled ? 'NBF-Fabric ✓' : t('demo / offline')}
+            </span>
+            <span className="text-zinc-500">
+              anchored {status.external_anchor.anchored} · demo {status.external_anchor.demo} · pending {status.external_anchor.pending}
+            </span>
           </div>
         )}
       </div>
 
       {status?.blocks?.length === 0 && (
-        <p className="text-[13.5px] text-zinc-500">No reports anchored yet — download a forensic report to mint the genesis block.</p>
+        <p className="text-[13.5px] text-zinc-500">{t('No reports anchored yet — download a forensic report to mint the genesis block.')}</p>
       )}
 
       {status?.blocks?.map((b: any) => {
@@ -241,7 +263,7 @@ function BlockchainLedger() {
                   disabled={checking[key]}
                   className={btn(key === '0' ? 'btn-primary' : '')}
                 >
-                  {checking[key] ? 'Verifying…' : 'Verify'}
+                  {checking[key] ? t('Verifying…') : t('Verify')}
                 </button>
               )}
             </div>
@@ -253,16 +275,35 @@ function BlockchainLedger() {
               <div>merkle root&nbsp;{b.merkle_root.slice(0, 20)}…</div>
               <div>nonce&nbsp;&nbsp;{b.nonce}</div>
               <div>mined&nbsp;&nbsp;{new Date(b.timestamp).toLocaleString()}</div>
+              <div>
+                anchor&nbsp;&nbsp;
+                {b.external_anchor ? (
+                  <span className="font-semibold text-zinc-700">
+                    {b.external_anchor.anchor_status === 'anchored' && '✓ Fabric'}
+                    {b.external_anchor.anchor_status === 'demo' && '⋄ demo'}
+                    {b.external_anchor.anchor_status === 'pending' && '⚙ pending'}
+                    {b.external_anchor.anchor_status === 'not_anchored' && '—'}
+                  </span>
+                ) : (
+                  '—'
+                )}
+              </div>
+              <div>
+                ipfs&nbsp;&nbsp;
+                {b.external_anchor?.ipfs_cid
+                  ? String(b.external_anchor.ipfs_cid).slice(0, 16) + '…'
+                  : '—'}
+              </div>
             </div>
 
             {res && (
               <div className="mt-3 space-y-1 border-t border-[#F1EEE9] pt-3 text-[12px]">
                 {res.valid ? (
-                  <p className="text-[#3f6f4f]">On-disk report hash matches the anchored hash; chain linkage intact.</p>
+                  <p className="text-[#3f6f4f]">{t('On-disk report hash matches the anchored hash; chain linkage intact.')}</p>
                 ) : (
                   <>
                     <p className="text-[#DC2626]">
-                      {(res.problems || [res.error]).join(' · ')}
+                      {(res.problems || [t(`error.${res.error}`)]).join(' · ')}
                     </p>
                     {res.current_file_sha256 && (
                       <p className="font-mono text-zinc-500">
@@ -271,6 +312,23 @@ function BlockchainLedger() {
                       </p>
                     )}
                   </>
+                )}
+                {res?.external_anchor?.anchor_status && (
+                  <p
+                    className={`mt-1 font-mono text-[11.5px] ${
+                      res.external_anchor.anchor_status === 'anchored'
+                        ? 'text-[#3f6f4f]'
+                        : 'text-zinc-500'
+                    }`}
+                  >
+                    {res.external_anchor.anchor_status === 'anchored'
+                      ? `✓ NBF-Fabric anchored · ipfs ${String(res.external_anchor.ipfs_cid || '').slice(0, 20)}… · tx ${String(res.external_anchor.tx_id || '').slice(0, 20)}…`
+                      : res.external_anchor.anchor_status === 'demo'
+                        ? '⋄ demo anchor (NBF_FABRIC offline)'
+                        : res.external_anchor.anchor_status === 'pending'
+                          ? `⚙ external anchor pending · ${res.external_anchor.error || ''}`
+                          : `external anchor: ${res.external_anchor.anchor_status}`}
+                  </p>
                 )}
               </div>
             )}
@@ -284,6 +342,7 @@ function BlockchainLedger() {
 /* ------------------------------- Analyze tab ------------------------------- */
 
 function FileAnalyzer() {
+  const t = useT()
   const [file, setFile] = useState<File | null>(null)
   const [role, setRole] = useState('adult')
   const [result, setResult] = useState<any>(null)
@@ -310,10 +369,9 @@ function FileAnalyzer() {
   return (
     <div className="space-y-5">
       <div className="card p-6">
-        <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">Analyze a recording</h3>
+        <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">{t('Analyze a recording')}</h3>
         <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-zinc-500">
-          Upload a call recording (wav, mp3, flac). VoiceShield resamples to 16 kHz, slides a 300 ms window across the
-          file, and returns the full per-window XAI breakdown.
+          {t('Upload a call recording (wav, mp3, flac). VoiceShield resamples to 16 kHz, slides a 300 ms window across the file, and returns the full per-window XAI breakdown.')}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <input
@@ -327,11 +385,11 @@ function FileAnalyzer() {
             onChange={(e) => setRole(e.target.value)}
             className="rounded-full border border-[#E4E4E7] bg-white px-3.5 py-1.5 text-[13px] font-medium text-zinc-800 outline-none"
           >
-            <option value="adult">adult</option>
-            <option value="child">child</option>
+            <option value="adult">{t('role.adult')}</option>
+            <option value="child">{t('role.child')}</option>
           </select>
           <button onClick={run} disabled={!file || busy} className={btn('btn-primary')}>
-            {busy ? 'Analyzing…' : 'Analyze'}
+            {busy ? t('Analyzing…') : t('Analyze')}
           </button>
         </div>
       </div>
@@ -339,14 +397,14 @@ function FileAnalyzer() {
       {result &&
         (result.error ? (
           <p className="text-[13.5px]" style={{ color: '#DC2626' }}>
-            {result.error}
+            {t(`error.${result.error}`)}
           </p>
         ) : (
           <div className="card p-6">
             <div className="grid gap-4 sm:grid-cols-3">
-              <Metric label="Peak score" value={`${(result.peak_score * 100).toFixed(0)}%`} />
-              <Metric label="Risk band" value={result.risk_band} />
-              <Metric label="Windows analyzed" value={result.windows_analyzed} />
+              <Metric label={t('Peak score')} value={`${(result.peak_score * 100).toFixed(0)}%`} />
+              <Metric label={t('Risk band')} value={t(`band.${result.risk_band}`)} />
+              <Metric label={t('Windows analyzed')} value={result.windows_analyzed} />
             </div>
             {scores.length > 0 && (
               <div className="mt-4">
@@ -363,12 +421,13 @@ function FileAnalyzer() {
 /* ------------------------------- Speakers tab ------------------------------- */
 
 function SpeakerEnroll() {
+  const t = useT()
   const [label, setLabel] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [msg, setMsg] = useState('')
 
   const enroll = async () => {
-    if (!label || !file) return setMsg('Provide a label and a genuine voice sample.')
+    if (!label || !file) return setMsg(t('msg.Provide a label and a genuine voice sample.'))
     const fd = new FormData()
     fd.append('file', file)
     const r = await fetch(`${apiBase()}/api/speakers/register?label=${encodeURIComponent(label)}&language=en`, {
@@ -376,21 +435,24 @@ function SpeakerEnroll() {
       body: fd,
     })
     const j = await r.json()
-    setMsg(j.ok ? `Enrolled \"${label}\" — cross-session consistency checks are now active for this voice.` : `Error: ${j.detail || 'failed'}`)
+    setMsg(
+      j.ok
+        ? t('msg.Enrolled "{label}" — cross-session consistency checks are now active for this voice.', { label })
+        : t('msg.Error: {d}', { d: j.detail || 'failed' })
+    )
   }
 
   return (
     <div className="card p-6">
-      <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">Enroll a trusted speaker</h3>
+      <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">{t('Enroll a trusted speaker')}</h3>
       <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-zinc-500">
-        Upload about ten seconds of genuine speech per person. Live sessions tagged with this label are compared
-        against the stored embedding (pgvector cosine similarity); a mismatch adds +0.10 to the fused risk score.
+        {t('Upload about ten seconds of genuine speech per person. Live sessions tagged with this label are compared against the stored embedding (pgvector cosine similarity); a mismatch adds +0.10 to the fused risk score.')}
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Speaker label"
+          placeholder={t('Speaker label')}
           className="w-48 rounded-lg border border-[#E4E4E7] bg-white px-3 py-2 text-[13.5px] text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-[#2563EB]"
         />
         <input
@@ -400,7 +462,7 @@ function SpeakerEnroll() {
           className="max-w-xs text-[13px] text-zinc-600 file:mr-3 file:rounded-full file:border-0 file:bg-[#F1EEE9] file:px-4 file:py-1.5 file:text-[12.5px] file:font-semibold file:text-zinc-900 hover:file:bg-[#E4E4E7]"
         />
         <button onClick={enroll} className={btn()}>
-          Enroll
+          {t('Enroll')}
         </button>
       </div>
       {msg && <p className="mt-3 text-[13.5px] text-zinc-600">{msg}</p>}
@@ -410,9 +472,9 @@ function SpeakerEnroll() {
 
 function Metric({ label, value, capitalize }: { label: string; value: any; capitalize?: boolean }) {
   return (
-    <div className="rounded-lg bg-[#FAF8F5] px-4 py-3">
-      <div className="text-[10.5px] font-bold uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className={`mt-0.5 font-serif text-[22px] font-bold tracking-tight text-zinc-900 ${capitalize ? 'capitalize' : ''}`}>
+    <div className="overflow-hidden rounded-lg bg-[#FAF8F5] px-4 py-3">
+      <div className="truncate text-[10.5px] font-bold uppercase tracking-wide text-zinc-500" title={label}>{label}</div>
+      <div className={`mt-0.5 truncate font-serif text-[22px] font-bold tracking-tight text-zinc-900 ${capitalize ? 'capitalize' : ''}`}>
         {value}
       </div>
     </div>

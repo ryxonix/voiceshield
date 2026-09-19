@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useT } from '../i18n'
 
 export function bandColor(band?: string): string {
   if (band === 'critical' || band === 'high') return '#DC2626'
@@ -8,6 +9,7 @@ export function bandColor(band?: string): string {
 
 /** Circular risk gauge — serif numeral, editorial styling. */
 export function RiskGauge({ score, band }: { score: number; band: string }) {
+  const t = useT()
   const R = 74
   const CIRC = 2 * Math.PI * R
   const frac = Math.max(0, Math.min(1, score))
@@ -41,11 +43,11 @@ export function RiskGauge({ score, band }: { score: number; band: string }) {
           {(score * 100).toFixed(0)}
         </text>
         <text x="90" y="114" textAnchor="middle" fontSize="10.5" fill="#71717A" style={{ letterSpacing: '0.08em' }}>
-          SYNTHETIC SCORE
+          {t('SYNTHETIC SCORE')}
         </text>
       </svg>
       <div className="mt-1.5 text-[12px] font-semibold capitalize" style={{ color }}>
-        {band} risk
+        {t('{band} risk', { band: t(`band.${band}`) })}
       </div>
     </div>
   )
@@ -53,24 +55,25 @@ export function RiskGauge({ score, band }: { score: number; band: string }) {
 
 /** Per-window XAI factor bars — editorial rows. */
 export function XaiBars({ ev }: { ev: any }) {
+  const t = useT()
   const rows = useMemo(() => {
     const p = (ev && ev.prosody) || {}
     const num = (v: any, fallback = 0) => (typeof v === 'number' ? v : fallback)
     return [
-      { label: 'Model P(synthetic)', v: num(ev?.model_prob), max: 1, color: '#2563EB' },
-      { label: 'XAI risk (fused)', v: num(ev?.xai_risk), max: 1, color: '#7c5cbf' },
-      { label: 'Phase discontinuity', v: 1 - (p.phase_continuity ?? 1), max: 1, color: '#b45309' },
-      { label: 'Jitter', v: num(p.jitter_pct), max: 2.5, color: '#71717A', fmt: (v: number) => `${v.toFixed(3)}%` },
-      { label: 'Shimmer', v: num(p.shimmer_pct), max: 6, color: '#71717A', fmt: (v: number) => `${v.toFixed(3)}%` },
+      { label: t('Model P(synthetic)'), v: num(ev?.model_prob), max: 1, color: '#2563EB' },
+      { label: t('XAI risk (fused)'), v: num(ev?.xai_risk), max: 1, color: '#7c5cbf' },
+      { label: t('Phase discontinuity'), v: 1 - (p.phase_continuity ?? 1), max: 1, color: '#b45309' },
+      { label: t('Jitter'), v: num(p.jitter_pct), max: 2.5, color: '#71717A', fmt: (v: number) => `${v.toFixed(3)}%` },
+      { label: t('Shimmer'), v: num(p.shimmer_pct), max: 6, color: '#71717A', fmt: (v: number) => `${v.toFixed(3)}%` },
     ]
-  }, [ev])
+  }, [ev, t])
   return (
     <div className="space-y-2.5">
       {rows.map((r) => (
         <div key={r.label}>
-          <div className="flex justify-between text-[12.5px]">
-            <span className="text-zinc-800">{r.label}</span>
-            <span className="font-mono text-zinc-500">
+          <div className="flex justify-between gap-2 text-[12.5px]">
+            <span className="min-w-0 truncate text-zinc-800">{r.label}</span>
+            <span className="shrink-0 font-mono text-zinc-500">
               {r.fmt ? r.fmt(r.v) : `${((r.v / r.max) * 100).toFixed(0)}%`}
             </span>
           </div>
@@ -87,38 +90,5 @@ export function XaiBars({ ev }: { ev: any }) {
         </div>
       ))}
     </div>
-  )
-}
-
-/** Session card — editorial list row. */
-export function SessionCard({ s, onClick, active }: { s: any; onClick?: () => void; active?: boolean }) {
-  const band =
-    s.max_score >= 0.85 ? 'critical' : s.max_score >= 0.68 ? 'high' : s.max_score >= 0.35 ? 'medium' : 'low'
-  const color = bandColor(band)
-  return (
-    <button
-      onClick={onClick}
-      className="w-full rounded-xl border p-3.5 text-left transition-colors hover:border-zinc-300"
-      style={{ background: active ? '#fff' : 'transparent', borderColor: active ? '#18181B' : '#E4E4E7' }}
-    >
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-[12.5px] text-zinc-800">{s.call_id}</span>
-        <span className="text-[14px] font-bold" style={{ color }}>
-          {(s.max_score * 100).toFixed(0)}%
-        </span>
-      </div>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11.5px] text-zinc-500">
-        <span className="capitalize">{s.role}</span>
-        <span className="uppercase">{s.language}</span>
-        <span>{s.window_count} windows</span>
-        {s.enterprise_verified && <span style={{ color: '#3f6f4f' }}>✓ enterprise</span>}
-        {s.status === 'active' && (
-          <span className="live-dot inline-flex items-center gap-1 font-semibold" style={{ color: '#2563EB' }}>
-            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: '#2563EB' }} />
-            live
-          </span>
-        )}
-      </div>
-    </button>
   )
 }

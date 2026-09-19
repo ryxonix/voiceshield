@@ -17,12 +17,14 @@ soundfile>=0.12.0
 onnxruntime>=1.18.0       # Apache-2.0 — free
 torch>=2.2.0              # BSD — free
 onnx>=1.16.0              # Apache-2.0 — free
+transformers>=4.40.0       # Apache-2.0 — free (Cloud XLS-R + wav2vec2 fine-tunes)
 
 # ── PDF Reports ──────────────────────
 reportlab>=4.1             # BSD — free
 
 # ── HTTP Client (alerts) ────────────
 httpx>=0.27.0              # BSD — free
+cryptography>=41.0.0          # BSD/Apache-2.0 - free (AES-256-GCM for I4C external anchor)
 
 # ── Async Email ──────────────────────
 aiosmtplib>=3.0.0          # MIT — free

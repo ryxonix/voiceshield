@@ -1,6 +1,8 @@
 import { bandColor } from './RiskGauge'
+import { useT } from '../i18n'
 
 export function SessionCard({ s, onClick, active }: { s: any; onClick?: () => void; active?: boolean }) {
+  const t = useT()
   const band =
     s.max_score >= 0.85 ? 'critical' : s.max_score >= 0.68 ? 'high' : s.max_score >= 0.35 ? 'medium' : 'low'
   const color = bandColor(band)
@@ -17,14 +19,14 @@ export function SessionCard({ s, onClick, active }: { s: any; onClick?: () => vo
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11.5px] text-zinc-500">
-        <span className="capitalize">{s.role}</span>
+        <span>{s.role === 'child' ? t('role.child') : t('role.adult')}</span>
         <span className="uppercase">{s.language}</span>
-        <span>{s.window_count} windows</span>
-        {s.enterprise_verified && <span style={{ color: '#3f6f4f' }}>✓ enterprise</span>}
+        <span>{t('{n} windows', { n: s.window_count })}</span>
+        {s.enterprise_verified && <span style={{ color: '#3f6f4f' }}>✓ {t('enterprise')}</span>}
         {s.status === 'active' && (
           <span className="live-dot inline-flex items-center gap-1 font-semibold" style={{ color: '#2563EB' }}>
             <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: '#2563EB' }} />
-            live
+            {t('live')}
           </span>
         )}
       </div>

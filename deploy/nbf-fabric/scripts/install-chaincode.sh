@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# VoiceShield AI — build, install, approve & commit the anchors chaincode.
+# Run from deploy/nbf-fabric/ after the network is up (scripts/local-wsl2.sh).
+set -euo pipefail
+
+CC_NAME=${CC_NAME:-voiceshield-report}
+CC_VERSION=${CC_VERSION:-1.0}
+CC_SEQUENCE=${CC_SEQUENCE:-1}
+CHANNEL=${CHANNEL:-mychannel}
+ORDERER=${ORDERER:-orderer.vsh.example.com:7050}
+CC_PATH=${CC_PATH:-/chaincode/src}          # ./go mounted into the peer
+ART_DIR=${ART_DIR:-/chaincode/channel-artifacts}
+ADMIN_MSP=/etc/hyperledger/crypto/peerOrganizations/vsh.example.com/users/Admin@vsh.example.com/msp
+
+echo "==> Packaging chaincode"
+docker exec vsh-peer0 peer lifecycle chaincode package \
+  ${ART_DIR}/${CC_NAME}.tgz \
+  --path ${CC_PATH} \
+  --lang golang \
+  --label "${CC_NAME}_${CC_VERSION}"
+
+echo "==> Install on peer0"
+docker exec vsh-peer0 peer lifecycle chaincode install ${ART_DIR}/${CC_NAME}.tgz
+
+PKG_ID=$(docker exec vsh-peer0 peer lifecycle chaincode queryinstalled \
+  | grep -o "${CC_NAME}_${CC_VERSION}:[A-Za-z0-9]*" | head -1)
+echo "    package id = ${PKG_ID}"
+
+echo "==> Approve for Org1"
+docker exec \
+  -e CORE_PEER_LOCALMSPID=Org1MSP \
+  -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
+  -e CORE_PEER_ADDRESS=peer0:7051 \
+  -e CORE_PEER_TLS_ENABLED=false \
+  vsh-peer0 peer lifecycle chaincode approveformyorg \
+  --orderer ${ORDERER} \
+  --channelID ${CHANNEL} \
+  --name ${CC_NAME} \
+  --version ${CC_VERSION} \
+  --package-id "${PKG_ID}" \
+  --sequence ${CC_SEQUENCE}
+
+echo "==> Commit on channel"
+docker exec \
+  -e CORE_PEER_LOCALMSPID=Org1MSP \
+  -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
+  -e CORE_PEER_ADDRESS=peer0:7051 \
+  -e CORE_PEER_TLS_ENABLED=false \
+  vsh-peer0 peer lifecycle chaincode commit \
+  --orderer ${ORDERER} \
+  --channelID ${CHANNEL} \
+  --name ${CC_NAME} \
+  --version ${CC_VERSION} \
+  --sequence ${CC_SEQUENCE}
+
+sleep 3
+echo "==> Smoke test: init + query"
+docker exec \
+  -e CORE_PEER_LOCALMSPID=Org1MSP \
+  -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
+  -e CORE_PEER_ADDRESS=peer0:7051 \
+  -e CORE_PEER_TLS_ENABLED=false \
+  vsh-peer0 peer chaincode invoke \
+  --orderer ${ORDERER} --channelID ${CHANNEL} --name ${CC_NAME} \
+  -c '{"Args":["InitLedger"]}' || true
+docker exec \
+  -e CORE_PEER_LOCALMSPID=Org1MSP \
+  -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
+  -e CORE_PEER_ADDRESS=peer0:7051 \
+  -e CORE_PEER_TLS_ENABLED=false \
+  vsh-peer0 peer chaincode query \
+  --channelID ${CHANNEL} --name ${CC_NAME} -c '{"Args":["QueryAll"]}'
+
+echo "==> Chaincode ${CC_NAME}@${CC_VERSION} live on ${CHANNEL}"

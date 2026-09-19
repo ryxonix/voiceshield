@@ -91,6 +91,21 @@ CREATE TABLE IF NOT EXISTS blocks (
     created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_call ON blocks(call_id);
+
+CREATE TABLE IF NOT EXISTS block_anchors (
+    block_index   INTEGER PRIMARY KEY,
+    call_id       TEXT NOT NULL,
+    anchor_status TEXT NOT NULL DEFAULT 'pending',
+    provider      TEXT NOT NULL DEFAULT 'demo',
+    ipfs_cid      TEXT,
+    enc_alg       TEXT,
+    key_fp        TEXT,
+    payload_sha256 TEXT,
+    tx_id         TEXT,
+    error         TEXT,
+    anchored_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_block_anchors_call ON block_anchors(call_id);
 """
 
 
@@ -374,3 +389,52 @@ def get_block_by_call(call_id: str) -> Optional[Dict[str, Any]]:
 def list_blocks(limit: int = 100) -> List[Dict[str, Any]]:
     rows = _fetchall("SELECT * FROM blocks ORDER BY block_index ASC LIMIT ?", (int(limit),))
     return [dict(r) for r in rows]
+
+# ---- External anchor (NBF-Lite / Fabric) side table --------------------
+
+def upsert_block_anchor(
+    *,
+    block_index: int,
+    call_id: str,
+    anchor_status: str,
+    provider: str,
+    ipfs_cid: Optional[str] = None,
+    enc_alg: Optional[str] = None,
+    key_fp: Optional[str] = None,
+    payload_sha256: Optional[str] = None,
+    tx_id: Optional[str] = None,
+    error: Optional[str] = None,
+) -> None:
+    _execute(
+        "INSERT INTO block_anchors (block_index, call_id, anchor_status, provider, ipfs_cid, "
+        "enc_alg, key_fp, payload_sha256, tx_id, error, anchored_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now')) "
+        "ON CONFLICT(block_index) DO UPDATE SET "
+        "anchor_status=excluded.anchor_status, provider=excluded.provider, "
+        "ipfs_cid=excluded.ipfs_cid, enc_alg=excluded.enc_alg, key_fp=excluded.key_fp, "
+        "payload_sha256=excluded.payload_sha256, tx_id=excluded.tx_id, "
+        "error=excluded.error, anchored_at=datetime('now')",
+        (
+            int(block_index),
+            call_id,
+            anchor_status,
+            provider,
+            ipfs_cid,
+            enc_alg,
+            key_fp,
+            payload_sha256,
+            tx_id,
+            error,
+        ),
+    )
+
+
+def get_block_anchor(block_index: int) -> Optional[Dict[str, Any]]:
+    row = _fetchone("SELECT * FROM block_anchors WHERE block_index=?", (int(block_index),))
+    return dict(row) if row else None
+
+
+def get_block_anchor_by_call(call_id: str) -> Optional[Dict[str, Any]]:
+    row = _fetchone("SELECT * FROM block_anchors WHERE call_id=? ORDER BY block_index DESC LIMIT 1", (call_id,))
+    return dict(row) if row else None
+

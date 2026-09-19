@@ -58,13 +58,17 @@ def _is_silent(window: np.ndarray) -> bool:
     return False
 
 
-def _model_probability(window: np.ndarray) -> float:
+def _model_probability(window: np.ndarray, *, include_xlsr: bool = False) -> float:
     """Run the best available trained models and ensemble their outputs.
 
     - If Dhwani AND the official pretrained AASIST-L are both loaded,
       returns the average of the two spoof probabilities (ensemble).
     - If only one is available, uses it alone.
     - Legacy local AASIST-L is a last resort (untrained).
+
+    `include_xlsr` gates the heavy cloud-trained XLS-R-300m detector, which
+    takes seconds per window on CPU — reserved for the file-analysis path so
+    real-time streaming stays within the ~78 ms per-window latency budget.
     """
     if _is_silent(window):
         return 0.0
@@ -73,6 +77,7 @@ def _model_probability(window: np.ndarray) -> float:
     win_f32 = (window.astype(np.float32) / 32768.0).copy()
     dhwani_prob: float | None = None
     aasist_official_prob: float | None = None
+    cloud_xlsr_prob: float | None = None
 
     # ── Dhwani ─────────────────────────────────────────────────────────
     try:
@@ -95,18 +100,28 @@ def _model_probability(window: np.ndarray) -> float:
     except Exception as exc:
         log.warning("AASIST-L official unavailable: %s", exc)
 
-    # ── Ensemble ───────────────────────────────────────────────────────
-    if dhwani_prob is not None and aasist_official_prob is not None:
-        return float(np.clip(0.5 * dhwani_prob + 0.5 * aasist_official_prob, 0.0, 1.0))
-    if dhwani_prob is not None:
-        log.info("Using Dhwani alone (AASIST-L official not loaded)")
-        return dhwani_prob
-    if aasist_official_prob is not None:
-        log.info("Using AASIST-L official alone (Dhwani not loaded)")
-        return aasist_official_prob
+    # ── Cloud XLS-R (trained Wav2Vec2 sequence classification) ─────────
+    # Optional: only for /api/analyze. load() is idempotent and lazily
+    # pulls in the 1.2 GB checkpoint on first file analysis.
+    if include_xlsr:
+        try:
+            from app.engine.wfp import CloudXLSR
+            detector = CloudXLSR.get_instance()
+            if detector.is_ready or detector.load():
+                cloud_xlsr_prob = float(detector.predict_spoof(
+                    win_f32, sr=settings.sample_rate))
+        except Exception as exc:
+            log.warning("Cloud XLS-R unavailable: %s", exc)
 
-    # ── Last resort: legacy local (untrained) AASIST-L ─────────────────
-    log.warning("Both Dhwani and AASIST-L official unavailable — using legacy local AASIST-L")
+    # ── Ensemble ───────────────────────────────────────────────────────
+    # Average of every *trained* model that actually loaded. The cloud
+    # XLS-R (sih_cloud_xlsr) is the trained 300m box; Dhwani and AASIST-L
+    # official are the two MIT-licensed pretrained boxes. Any subset that
+    # is ready participates (we never degrade to untrained legacy).
+    boxes = [p for p in (dhwani_prob, aasist_official_prob, cloud_xlsr_prob) if p is not None]
+    if boxes:
+        return float(np.clip(sum(boxes) / len(boxes), 0.0, 1.0))
+    log.warning("No trained models available — falling back to legacy untrained AASIST-L")
     return float(AASISTInference.get_instance().predict(window))
 
 
@@ -115,6 +130,7 @@ def analyze_window(
     *,
     role: str = "adult",
     speaker_mismatch: bool | None = None,
+    include_xlsr: bool = False,
 ) -> dict:
     """
     Run the full per-window detection pipeline on an int16 PCM window.
@@ -125,11 +141,15 @@ def analyze_window(
         prosody{jitter_pct, shimmer_pct, phase_continuity,
                 pitch_stability, noise_floor_dropouts, watermark_snr},
         latency_ms
+
+    `include_xlsr` enables the heavy cloud-trained XLS-R-300m detector
+    (seconds/window) — use it only for the file-analysis path, never for
+    real-time streaming.
     """
     prosodics = extract_prosodics(window, sr=settings.sample_rate)
 
     t0 = time.perf_counter()
-    model_prob = _model_probability(window)
+    model_prob = _model_probability(window, include_xlsr=include_xlsr)
     latency_ms = (time.perf_counter() - t0) * 1000
 
     watermark = check_watermark(

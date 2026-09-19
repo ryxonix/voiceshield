@@ -1,0 +1,146 @@
+# VoiceShield AI · NBF-Lite / Fabric external anchor
+
+Optional, **fail-open** counterpart to the local report block-chain (see
+`backend/app/blockchain/ledger.py`). When enabled, every forensic report's
+block gets a second, independently-verifiable commitment:
+
+1. the report PDF is encrypted (AES-256-GCM, org-custody key) and pinned to
+   **IPFS** as ciphertext — raw content never leaves the operator,
+2. the block hash, Merkle root, file SHA-256, IPFS CID and a key fingerprint
+   are recorded on a **Hyperledger Fabric** ledger through this REST gateway,
+3. anyone can verify the public anchor via the backend API:
+   `GET /api/blockchain/onchain/{call_id}`.
+
+If the gateway is unreachable the local PoW chain stays authoritative and the
+anchor is marked `pending` (retryable via
+`POST /api/blockchain/retry/{call_id}`). No Fabric node → anchors fall back to
+a truthful `demo` status.
+
+```
+┌──────────────┐  POST /store (cipher b64)   ┌──────────────┐   IPFS (Kubo)
+│  backend     │ ──────────────────────────▶ │  gateway :4000 │ ───────────▶ encrypted PDF
+│  (FastAPI)   │  POST /fabric/v1/invokecc   │  (express)      │  ┌──────┐
+└──────────────┘ ──────────────────────────▶ │   └─┬─────────┘  │ Hyperledger
+       │                                      │    ▼            │ Fabric
+       └─ GET /api/blockchain/onchain/{call}  │ fabric_client   └► ReportAnchor ✔
+                                             └──────────────┘
+```
+
+## 1. Gateway endpoints
+
+| Method | Path                    | Body / query                                  | Returns |
+|--------|-------------------------|-----------------------------------------------|---------|
+| `GET`  | `/health`               | –                                             | `{ status }` |
+| `POST` | `/store`                | `{ fileName, fileContents (base64) }`         | `{ hash: CID }` |
+| `GET`  | `/retrieve/:cid`        | –                                             | `{ data (base64) }` |
+| `POST` | `/fabric/v1/invokecc`   | `{ fcn, args, user, ccname, channel, cfgpath, local, mspId, txId }` | `{ tx_id, status }` |
+| `GET`  | `/fabric/v1/querycc`    | `fcn=QueryReport&args=<call_id>&user=...`     | `{ result }` |
+
+## 2. Quick start (WSL2 Ubuntu + Docker)
+
+Prereqs: Docker Desktop (WSL 2 backend), `docker compose`, Node ≥ 16.
+
+```bash
+# terminal 1 — Fabric test network (crypto, channel, chaincode)
+cd deploy/nbf-fabric
+./scripts/gen-crypto.sh                     # fabric-ca enroll + MSPs
+./scripts/gen-connection-profile.sh         # connection-org1.json
+docker compose -f docker-compose.yml up --build -d
+./scripts/install-chaincode.sh              # deploy voiceshield-report chaincode
+
+# terminal 2 — IPFS daemon
+ipfs daemon --init                          # runs on :5001 (API) / :8080 (gateway)
+
+# terminal 3 — REST gateway
+cd deploy/nbf-fabric/gateway
+npm install
+IPFS_API_HOST=127.0.0.1 IPFS_API_PORT=5001 IPFS_GATEWAY=http://127.0.0.1:8080 \
+AS_LOCALHOST=true CCP_FILE=../connection-org1.json WALLET_DIR=./wallet \
+node server.js                              # listens on :4000
+
+# sanity checks
+curl http://localhost:4000/health
+curl -X POST http://localhost:4000/store -H 'Content-Type: application/json' \
+     -d '{"fileName":"t.pdf.enc","fileContents":"JVBERi0xLjQ="}'          # → { hash }
+```
+
+## 3. Free cloud deployment (Oracle Cloud Always Free ARM)
+
+Full step-by-step (VM creation, firewall, Docker, both code-transfer methods,
+and public-gateway vs SSH-tunnel modes): **`docs/nbflite-oracle-free-tier.md`**.
+
+**No cloud account / no credit card?** Run the same stack in a GitHub
+Codespace (Ubuntu + Docker built in) and expose the gateway via public port
+forwarding — see **`docs/nbflite-codespaces.md`**.
+
+Quick path — create a free `VM.Standard.A1.Flex` (Ubuntu 22.04 ARM), install
+Docker, copy this folder, then:
+
+```bash
+bash scripts/deploy-cloud.sh     # crypto -> wallet -> compose up -> channel -> chaincode
+bash scripts/harden-ports.sh     # ufw: allow only 22 + 4000 (or use an SSH tunnel)
+```
+
+Point the backend at the public gateway:
+
+```ini
+# backend/.env
+BLOCKCHAIN_EXTERNAL_ANCHOR=true
+NBF_GATEWAY_URL=http://<vm-public-ip>:4000
+```
+
+Safer demo mode (no public port — leave :4000 closed and tunnel instead):
+
+```bash
+ssh -i ~/.ssh/id_ed25519 -N -L 4000:localhost:4000 opc@<vm-public-ip>
+# backend/.env:  NBF_GATEWAY_URL=http://localhost:4000
+```
+
+## 4. Enable on the backend
+
+```ini
+# backend/.env
+BLOCKCHAIN_EXTERNAL_ANCHOR=true
+NBF_GATEWAY_URL=http://localhost:4000
+# optional overrides:
+# NBF_CHANNEL=mychannel
+# NBF_CC=voiceshield-report
+# NBF_USER=User1
+# NBF_MSP=Org1MSP
+# IPFS_STORE_URL=http://localhost:4000/store
+# REPORT_KEYS_DIR=reports/keys     # org master key custody
+```
+
+Restart the backend, then generate any forensic report. The block is mined,
+the encrypted PDF pinned, and the Fabric anchor committed.
+
+## 5. Verify an anchor
+
+```bash
+curl http://localhost:8000/api/blockchain/onchain/<call_id>
+```
+
+The response runs a live end-to-end check:
+
+- queries the chaincode `QueryReport(<call_id>)` and compares the on-ledger
+  `block_hash`, `file_sha256`, `merkle_root` fields to the local block,
+- fetches the pinned ciphertext from IPFS (`GET /retrieve/:cid`),
+- decrypts it with the org-derived report key and confirms the document is a
+  `%PDF` whose SHA-256 matches the anchored hash.
+
+It is **fail-open**: any unreachable service is reported in `problems`, never
+masked as a false success. Also available:
+
+- `GET /api/blockchain/onchain` — summary of anchored vs demo/pending anchors
+- `GET /api/blockchain/verify/call/{call_id}` — full local tamper-evidence
+  check plus the external-anchor state
+- `POST /api/blockchain/retry/{call_id}` — re-attempt a `pending` anchor
+
+## 6. Data-privacy notes (DPDP-first)
+
+- The ledger stores only hashes, the IPFS CID and a 16-hex key fingerprint —
+  **no** audio, transcript, names or decrypted content.
+- The PDF is AES-256-GCM encrypted with a per-report key derived from an
+  org-custody master key (`HMAC-SHA256(master, "voiceshield-report-anchor:"+call_id)`);
+  the key never leaves the operator machine.
+- Chaincode invocation does not include caller PII.

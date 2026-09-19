@@ -1,0 +1,366 @@
+================================================================================
+VOICESHIELD AI
+Complete Project Overview, Technology & Data-Source Inventory
+================================================================================
+
+Last updated : 19-Sep-2026
+Scope        : Full repository audit - backend, frontend, cloud training kit,
+               ML models, data sources, versions, licenses, and integrations.
+
+--------------------------------------------------------------------------------
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+
+VoiceShield AI is a zero-trust, real-time audio deepfake detection and
+mitigation platform built for the Indian telecom context. It listens to live
+voice calls (via WebSocket streaming) or analyzes uploaded audio and decides in
+real time whether the speaker is a real human (bonafide) or a synthetic /
+deepfake voice (spoof / AI voice clone).
+
+Target users  : telecom providers, banks, contact centers, parents
+                ("Child Shield" mode)
+Design goals  : free stack built on open / permissive licenses (attribution
+                retained); SIH-hackathon-compliant data;
+                DPDP Act 2023 privacy posture; sub-100 ms per-window latency.
+Detection mix : ensemble of acoustic deep models + explainable prosodic
+                features (jitter / shimmer / phase continuity) + cross-session
+                speaker consistency + enterprise watermark check.
+
+  score = 0.7 x model_prob + 0.3 x xai_risk
+
+The project is a single git repository with one commit ("Initial commit").
+
+--------------------------------------------------------------------------------
+2. HOW IT WORKS (PIPELINE)
+--------------------------------------------------------------------------------
+
+  Mic / call audio --> WebSocket --> Ring buffer (RAM only)
+        |                                    |
+        |                                    v
+        |                         Acoustic models (ensemble)
+        |                          - Dhwani (Wav2Vec2 XLS-R 300m + AASIST)
+        |                          - AASIST-L official pretrained
+        |                          - AASIST-L local retrained (fallback)
+        |                          - XLSR-300m SIH cloud fine-tune
+        |                                    |
+        |                                    v
+        |                         XAI prosody layer
+        |                          jitter / shimmer / phase continuity /
+        |                          pitch stability / noise-floor dropouts
+        |                                    |
+        |                                    v
+        |                         Fusion + risk band --> verdict
+        |                                    |
+        v                                    v
+  Scalar scores only            Alerts (Telegram / Gmail / ntfy.sh /
+  (no raw audio leaves          Fast2SMS / webhook)  +  incident telemetry
+  the device network)           --> I4C-ready forensic PDF
+                                        |
+                                        v
+                            SHA-256 + Merkle root anchored to a local
+                            proof-of-work (PoW) blockchain ledger
+                            (optional Hyperledger-Fabric / IPFS external anchor)
+
+Privacy: raw audio lives only in RAM and is overwritten every window.
+
+--------------------------------------------------------------------------------
+3. REPOSITORY STRUCTURE
+--------------------------------------------------------------------------------
+
+  voiceshield/
+  +- backend/                      FastAPI backend (Python 3.10+; built on 3.14)
+  |   +- app/
+  |   |   +- main.py               FastAPI entry point, all REST endpoints
+  |   |   +- config.py             Pydantic settings <-> backend/.env
+  |   |   +- store.py              SQLite / in-memory / Neon telemetry store
+  |   |   +- engine/               dhwani, aasist_official, wfp,
+  |   |   |                        features (prosody), fusion, pipeline,
+  |   |   |                        ring_buffer, speaker, watermark, risk, session
+  |   |   +- streaming/websocket.py  live-call WebSocket endpoint
+  |   |   +- mitigation/           alerts (TG/SMTP/ntfy/Fast2SMS/webhook),
+  |   |   |                        child_shield, router
+  |   |   +- forensics/pdf_report.py  I4C-ready forensic PDF
+  |   |   +- blockchain/           local PoW ledger + external (NBF-Fabric) anchor
+  |   |   +- compliance/dpdp.py    DPDP Act posture helpers
+  |   |   +- models/               AASIST-L architecture, ONNX export + inference
+  |   +- training/                 augmentations, dataset, fetch_indic, train,
+  |   |                            evaluate, cloud_dataset, build_sih_dataset,
+  |   |                            merge_protocols
+  |   +- models/                   ONNX/safetensors weights (dhwani, sih_cloud_xlsr,
+  |   |                            aasist_l)
+  |   +- hf_models/aasist/         official clovaai/aasist repo + weights
+  |   +- checkpoints/              local retrained AASIST-L (fallback)
+  |   +- data/                     training/eval audio (git-ignored)
+  |   +- reports/                  generated forensic PDFs
+  |   +- tests/                    pytest suite
+  |   +- requirements.txt
+  |   +- .env.example / .env
+  |   +- SOURCES_AND_TECHNOLOGY.md  SIH-grade data & tech documentation
+  +- frontend/                     React 19 + Vite + TypeScript SPA
+  |   +- src/pages/                Dashboard, Incidents, Reports
+  |   +- src/components/           RiskGauge, Radar, SessionCard, ShieldBanner, ui
+  |   +- src/i18n.tsx              en / hi / kn translations
+  +- cloud/                        Google Colab + Kaggle training kit
+  |   +- colab_01_build_dataset.ipynb   real voices + XTTS/RVC/FreeVC clones
+  |   +- colab_02_train_wav2vec2.ipynb  wav2vec2-base deepfake classifier
+  |   +- colab_03_train_xlsr.ipynb      XLSR-300m cross-lingual classifier
+  |   +- kaggle_train_wav2vec2.py       Kaggle equivalent of notebook 02
+  |   +- build_notebooks.py             generator for all notebooks
+  |   +- README.md
+  +- deploy/nbf-fabric/            optional Hyperledger-Fabric + IPFS anchor
+  +- start_all.bat                 one-click backend + frontend launcher
+  +- voiceshield_cloud/            artifacts from a cloud run (train.csv, val.csv,
+  |                                model.safetensors ...)
+  +- README.md
+
+--------------------------------------------------------------------------------
+4. TECHNOLOGY STACK
+--------------------------------------------------------------------------------
+
+4.1 Backend (Python)
+
+  Package               Min.      Installed   Purpose                         License     URL
+  --------------------- --------- ----------- ------------------------------ ----------- ------------------------------------------------
+  Python                3.10+     3.14.7      Runtime                        PSF        https://www.python.org
+  fastapi               >=0.115.0 0.141.1     REST + typed endpoints         MIT         https://fastapi.tiangolo.com
+  uvicorn[standard]     >=0.30.0  0.52.4      ASGI web server                BSD-3       https://www.uvicorn.org
+  websockets            >=12.0    17.1        Live streaming WS (via FastAPI) BSD-3      https://github.com/aaugustin/websockets
+  python-multipart      >=0.0.9   (req)       Multipart file uploads         MIT         https://github.com/andrew-d/python-multipart
+  numpy                 >=1.26.0  2.5.3       Numerics / DSP                 BSD         https://numpy.org
+  scipy                 >=1.12.0  1.18.1      FFT, resampling, filtering     BSD-3       https://scipy.org
+  librosa               >=0.10.0  1.0.0       STFT, pyin f0, prosody XAI     ISC         https://librosa.org
+  soundfile             >=0.12.0  0.14.0      WAV/FLAC/MP3 I/O (libsndfile)  BSD-3       https://pysoundfile.readthedocs.io
+  onnxruntime           >=1.18.0  1.29.0      CPU ONNX inference             MIT         https://onnxruntime.ai
+  torch                 >=2.2.0   2.14.0      PyTorch (training + AASIST-L)  BSD-3       https://pytorch.org
+  onnx                  >=1.16.0  1.22.0      ONNX model export              Apache-2.0  https://onnx.ai
+  reportlab             >=4.1     5.0.1       I4C-ready forensic PDF         BSD-3       https://docs.reportlab.com
+  httpx                 >=0.27.0  0.28.1      Telegram / ntfy / webhook      BSD-3       https://www.python-httpx.org
+  cryptography          >=41.0.0  (req)       AES-256-GCM report encryption  BSD/Apache  https://cryptography.io
+  aiosmtplib            >=3.0.0   5.1.3       Async Gmail SMTP alerts        MIT         https://github.com/veryacademy/aiosmtplib
+  pydantic              -        2.13.5       Validation / settings model     MIT         https://docs.pydantic.dev
+  pydantic-settings     >=2.2.0   2.15.0      env binding                    MIT         https://docs.pydantic.dev
+  python-dotenv         >=1.0.0   1.2.3       .env loading                   BSD-3       https://github.com/theskumar/python-dotenv
+  pytest                >=8.0.0   9.1.1       unit tests                     MIT         https://docs.pytest.org
+  pytest-asyncio        >=0.23.0  (req)       async tests                    MIT         https://github.com/pytest-dev/pytest-asyncio
+
+4.2 Frontend (React + TypeScript)
+
+  Package                 Version    Purpose                             License   URL
+  ------------------------ ---------- ---------------------------------- ---------- ------------------------------------------------
+  Node.js                 v26.9.0    runtime                             MIT        https://nodejs.org
+  npm                     v11.19.1   package manager                     MIT        https://www.npmjs.com
+  react                   ^19.2.8    UI framework                       MIT        https://react.dev
+  react-dom               ^19.2.8    DOM renderer                        MIT        https://react.dev
+  vite                    ^8.3.0     build tool / dev server             MIT        https://vitejs.dev
+  typescript              ~6.0.2     static typing                      Apache-2.0 https://www.typescriptlang.org
+  tailwindcss             ^4.3.3     CSS utility framework              MIT        https://tailwindcss.com
+  @tailwindcss/vite       ^4.3.3     Tailwind Vite plugin               MIT        https://tailwindcss.com
+  @vitejs/plugin-react    ^6.1.1     React fast-refresh plugin          MIT        https://vitejs.dev
+  oxlint                  ^1.81.0    linter (npm run lint)              MIT        https://oxc.rs
+  @types/react            ^19.2.18   type defs                          MIT        https://www.npmjs.com/@types/react
+  @types/react-dom        ^19.2.7    type defs                          MIT        https://www.npmjs.com/@types/react-dom
+  @types/node             ^24.13.3   type defs                          MIT        https://www.npmjs.com/@types/node
+
+  Frontend pages/components: Dashboard, Incidents, Reports; RiskGauge, Radar,
+  SessionCard, ShieldBanner, ui kit. i18n via src/i18n.tsx: en / hi / kn.
+
+4.3 Cloud training kit (free GPU)
+
+  Platform        Resource           Used for                     URL
+  --------------- ------------------ ---------------------------- --------------------------------------------
+  Google Colab    free T4 GPU        notebooks 01-04             https://colab.research.google.com
+  Kaggle          GPU T4 x2          kaggle_train_wav2vec2.py    https://www.kaggle.com
+  Hugging Face Hub (optional)         dataset/model push/reload  https://huggingface.co
+
+  Cloud audio tools: Coqui XTTS-v2 (voice cloning, CPML-1.0 non-commercial),
+  RVC, FreeVC (voice conversion, MIT), gTTS / edge-tts (plain TTS, unofficial
+  vendor web endpoints - eval/demo only) - generated audio is ours.
+  Colab-only dependencies: pandas / tqdm are imported ONLY by the cloud scripts
+  (cloud_dataset.py, build_notebooks.py) and not in backend/requirements.txt -
+  Google Colab & Kaggle preinstall them, so nothing extra is needed there.
+
+4.4 Deployment / optional infrastructure (deploy/nbf-fabric)
+
+  Component                    Purpose                                 License
+  ---------------------------- ---------------------------------------- --------
+  Hyperledger Fabric           MeitY National Blockchain Framework Lite
+                               external anchor for report hashes        Apache-2.0
+  IPFS                         encrypted report PDF storage             MIT / Apache-2.0
+  Docker Compose               gateway + chaincode deployment           Apache-2.0
+  Node.js gateway (Express)    REST bridge Fabric + IPFS                MIT
+
+--------------------------------------------------------------------------------
+5. AI / ML MODELS USED
+--------------------------------------------------------------------------------
+
+  Model                     Type / base                    Purpose                    Disk      License / source
+  ------------------------- ----------------------------- --------------------------- --------- --------------------------------------------
+  Dhwani                     Wav2Vec2 XLS-R 300m + AASIST  primary Indian-language      ~1.2 GB   MIT weights
+                             (ONNX, INT8 CPU)              deepfake detector                     https://huggingface.co/ayush2635/Dhwani-Multilingual-Deepfake-Audio-Detection-Model
+  AASIST-L (official)        graph attention countermeasure  ensemble detector /        <2 MB    MIT
+                             (clovaai/aasist)              backbone                             https://github.com/clovaai/aasist
+  AASIST-L (local retrained) our fine-tune, ONNX           fallback detector           ~0.1 MB   ours (MIT); trained on
+                                                                                               FLEURS + TTS spoofs
+  XLSR-300m SIH cloud        Wav2Vec2ForSequenceClassification  cross-lingual spaof    ~1.2 GB   ours (MIT); base Apache-2.0
+  fine-tune                  (safetensors)                 classifier from colab_03            (backend/models/sih_cloud_xlsr)
+  Speaker voice-print         deterministic one-way embedding   cross-session speaker  in-memory ours (MIT)
+                             (engine/speaker.py)           consistency (DPDP-safe)
+
+  Checkpoint / artifact paths on disk:
+    backend/models/dhwani/best_model.onnx                  (1204 MB)
+    backend/models/sih_cloud_xlsr/model.safetensors        (1204 MB)  + config/tokenizer
+    backend/models/aasist_l.onnx (+ .data)                 (exported AASIST-L)
+    backend/hf_models/aasist/models/weights/AASIST-L.pth   (official pretrained)
+    backend/checkpoints/best_model.pth                     (local fallback fine-tune)
+    backend/checkpoints/hindi_english_kannada/best_model.pth
+
+--------------------------------------------------------------------------------
+6. TRAINING DATA SOURCES (with links & licenses)
+--------------------------------------------------------------------------------
+
+6.1 Bonafide (real human voices)
+
+  Source           Link                                            License          Usage
+  ---------------- ------------------------------------------------ ---------------- --------------------------------------------
+  Google FLEURS    https://huggingface.co/datasets/google/fleurs    CC-BY-4.0        anchor "genuine" class (hi/en/kn/ta/te/ml/mr)
+  Common Voice     https://huggingface.co/datasets/mozilla-foundation/  CC0 (<=v13),  real-voice top-up in cloud pipeline
+   (version 17+)     common_voice_17_0                                CC-BY-4.0 (v14+)
+
+  Version split: common_voice_17_0  -> bonafide top-up in colab_01 (cloud pipeline)
+  (both CC-BY-4.0 as of v14; CC0 for v13 and earlier) - attribution retained.
+
+6.2 Spoof / deepfake generation (real A.I. impersonation, cloud pipeline)
+
+  Tool          Link                                                        License         How used
+  ------------- ------------------------------------------------------------ --------------- --------------------------------------------------------
+  Coqui XTTS-v2 https://github.com/coqui-ai/TTS                               CPML-1.0*       clones the actual bonafide speakers (voice impersonation)
+  RVC           https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI  MIT   voice-conversion style clones
+  FreeVC        https://github.com/OlaWod/FreeVC                              MIT             zero-shot voice conversion
+  gTTS          https://github.com/pndurette/gTTS                             free            plain TTS minority attack class
+  edge-tts      https://github.com/rany2/edge-tts                             free            plain TTS (~9 Indian languages)
+  ASVspoof 2019 (reference ONLY, not redistributed)                           research        optional external benchmark, never shipped
+   LA            https://www.asvspoof.org
+
+  * CPML-1.0 = Coqui Public Model Licence v1, free for research /
+    non-commercial (hackathon entry qualifies); we ship generated audio, not
+    model weights. NOTE: CPML is NON-COMMERCIAL ONLY - a commercial production
+    retrain should regenerate the spoof pool with MIT cloners (RVC / FreeVC /
+    Chatterbox) instead of XTTS to stay license-clean.
+  * gTTS / edge-tts are community wrappers around vendor TTS web endpoints
+    (unofficial, no API contract) - used only for eval/demo samples; the
+    generated audio is ours and never shipped.
+
+6.3 Pretrained-model sources (evaluation / integration)
+
+  Clova AASIST    https://github.com/clovaai/aasist                           MIT
+  Dhwani weights  https://huggingface.co/ayush2635/Dhwani-...                 MIT
+
+--------------------------------------------------------------------------------
+7. INTEGRATED SERVICES (all free / free-tier)
+--------------------------------------------------------------------------------
+
+  Service         What it does                 Where configured      Link
+  --------------- ---------------------------- --------------------- --------------------------------------------
+  Telegram Bot    real-time alert messages     TELEGRAM_BOT_TOKEN,   https://t.me/BotFather
+                                                TELEGRAM_CHAT_ID
+  Gmail SMTP      email alerts                 SMTP_HOST/PORT/USER/  Google Account -> App Passwords
+                                                PASSWORD, ALERT_EMAIL_TO
+  ntfy.sh         push notifications (no signup) NTFY_TOPIC, NTFY_SERVER  https://ntfy.sh
+  Fast2SMS        SMS alerts to Indian mobiles FAST2SMS_API_KEY,     https://www.fast2sms.com
+                                                FAST2SMS_TO_NUMBER
+  Webhook         any custom endpoint          WEBHOOK_URL
+  Resend          transactional email (alt)    RESEND_API_KEY        https://resend.com
+  Sentry          error tracking               SENTRY_DSN            https://sentry.io
+  Neon PostgreSQL serverless DB (optional)     DATABASE_URL          https://neon.tech
+  Hugging Face    model/data push + download   HF_TOKEN              https://huggingface.co/settings/tokens
+  Blockchain      LOCAL PoW SHA-256 ledger     BLOCKCHAIN_DIFFICULTY  (no key needed)
+  NBF Lite anchor Hyperledger-Fabric + IPFS   BLOCKCHAIN_EXTERNAL_ANCHOR etc.  deploy/nbf-fabric/
+  DoT escalation  Sanchar Saathi / Chakshu / DIP  CHAKSHU_DIP_WEBHOOK_URL (optional)
+                  suspected-fraud metadata routing via webhook - citizen-facing
+                  portals (NO public API), so this is OUR documented integration
+                  endpoint feeding them. Distinct from the post-fraud flow: the
+                  forensic PDF points victims to 1930 / cybercrime.gov.in /
+                  RBI Sachet (https://sachet.rbi.org.in). Regulatory context:
+                  RBI digital-payment security guidelines; training-capacity
+                  pathway: IndiaAI Mission (compute/dataset grants, no API).
+
+  Alerts are optional; missing keys are skipped at runtime.
+
+--------------------------------------------------------------------------------
+8. LATENCY / PERFORMANCE BUDGET (per 3 s analysis window)
+--------------------------------------------------------------------------------
+
+  Stage                                Budget
+  ------------------------------------ -------
+  WebSocket ingest + ring buffer       <= 7 ms
+  Prosodic feature extraction          <= 20 ms
+  Model inference (INT8 CPU ONNX)      <= 35 ms
+  Watermark + fusion + mitigation      <= 16 ms
+  TOTAL                                <= 78 ms
+
+  Windows: 3 s / 1 s hop default (300 ms / 100 ms fallback for legacy AASIST).
+  Risk thresholds: adult >= 0.85 critical; child >= 0.70 critical.
+
+--------------------------------------------------------------------------------
+9. ENVIRONMENT / RUNTIME HARDWARE
+--------------------------------------------------------------------------------
+
+  Backend runtime : Python 3.14.7 (venv at backend/venv) on Windows (win32)
+  Frontend runtime: Node v26.9.0, npm 11.19.1
+  Optional system tool: ffmpeg (only for AMR-NB/WB codec round-trip
+                    augmentations during training; auto-detected, skipped if
+                    absent - see backend/training/augmentations.py)
+  GPU (cloud)     : Google Colab free T4 (16 GB VRAM) / Kaggle T4 x2 for training
+  CPU inference   : onnxruntime with 2 inter / 4 intra threads
+  Database        : local SQLite (backend/voiceshield.db) or in-memory;
+                    optional Neon PostgreSQL (serverless)
+
+--------------------------------------------------------------------------------
+10. LICENSING & ATTRIBUTION SUMMARY
+--------------------------------------------------------------------------------
+
+  Project code (backend, frontend, cloud, training, PDF reports, PoW ledger): MIT.
+  Third-party licenses retained per backend/SOURCES_AND_TECHNOLOGY.md:
+    FLEURS (CC-BY-4.0, Google), Common Voice (CC0 / CC-BY-4.0, Mozilla),
+    AASIST (MIT, clovaai), Dhwani (MIT, ayush2635),
+    generated XTTS/RVC/FreeVC/gTTS/edge-tts audio (ours),
+    plus standard MIT / BSD-3 / ISC / Apache-2.0 package licenses.
+
+  FLEURS redistribution notice: raw wavs are git-ignored under backend/data;
+  shipped artifacts are fine-tuned models (derivative), not raw data.
+
+--------------------------------------------------------------------------------
+11. QUALITY & TESTS
+--------------------------------------------------------------------------------
+
+  Test files (backend/tests/): test_features (prosody),
+  test_fusion, test_ring_buffer, test_websocket, test_pdf_report,
+  test_external_anchor, test_blockchain. Run:
+    cd backend && venv\Scripts\python.exe -m pytest -q
+
+  Backend code size (backend/app/): ~4,500 lines of Python across 28 modules.
+
+--------------------------------------------------------------------------------
+12. QUICK START
+--------------------------------------------------------------------------------
+
+  Backend : cd backend
+             python -m venv venv && venv\Scripts\activate
+             pip install -r requirements.txt
+             copy .env.example .env
+             python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+             API docs -> http://localhost:8000/docs
+  Frontend: cd frontend && npm install && npm run dev   (http://localhost:5173)
+  One-click: double-click start_all.bat
+  Cloud train classifiers (optional feature): upload cloud/colab_01..03
+  notebooks to Colab and run (see cloud/README.md); drop the saved model into
+  backend/models/<name>/ and point backend/app/config.py at it.
+
+  REST API surface: /api/analyze, /api/detect, /api/sessions,
+  /api/incidents (+ report/ack), /api/report/{call_id}, /api/blockchain,
+  /api/blockchain/onchain, /api/speakers/register, /health, /info,
+  and WS /ws/live/{call_id}.
+
+================================================================================
+END OF DOCUMENT
+================================================================================

@@ -1,14 +1,12 @@
-import { useEffect } from 'react'
+import { useT } from '../i18n'
 
 export function ShieldBanner({ mitigation, onDismiss }: { mitigation?: any; onDismiss?: () => void }) {
+  const t = useT()
+
   if (!mitigation) return null
 
   const { action, score, threshold, role, message } = mitigation
   const isChild = action === 'child_shield' || role === 'child'
-
-  useEffect(() => {
-    // web audio stack gates the mic; no additional browser-level mute required
-  }, [])
 
   if (isChild) {
     return (
@@ -21,24 +19,24 @@ export function ShieldBanner({ mitigation, onDismiss }: { mitigation?: any; onDi
             </svg>
           </div>
           <div className="font-serif text-[22px] font-bold tracking-tight text-zinc-900 leading-tight">
-            Call paused
+            {t('Call paused')}
           </div>
           <p className="mt-2 text-[14px] leading-relaxed text-zinc-600">
-            {message || 'A potential AI-cloned voice was detected. A trusted guardian should verify the caller before continuing.'}
+            {message || t('A potential AI-cloned voice was detected. A trusted guardian should verify the caller before continuing.')}
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <button
               onClick={onDismiss}
               className="rounded-full border border-zinc-900 bg-zinc-900 px-6 py-2 text-[13.5px] font-semibold text-white transition-colors hover:bg-zinc-700"
             >
-              Dismiss
+              {t('Dismiss')}
             </button>
           </div>
           <div className="mt-6 flex items-center justify-center gap-2.5 text-[12px] text-zinc-500">
-            <span className="font-semibold text-zinc-700">{role}</span>
-            <span className="text-zinc-300">· synthetic score</span>
+            <span className="font-semibold text-zinc-700">{role === 'child' ? t('role.child') : t('role.adult')}</span>
+            <span className="text-zinc-300">· {t('synthetic score')}</span>
             <span className="font-mono text-zinc-900">{(score * 100).toFixed(0)}%</span>
-            <span className="text-zinc-300">threshold {(threshold * 100).toFixed(0)}%</span>
+            <span className="text-zinc-300">{t('threshold {t}%', { t: (threshold * 100).toFixed(0) })}</span>
           </div>
         </div>
       </div>
@@ -58,8 +56,8 @@ export function ShieldBanner({ mitigation, onDismiss }: { mitigation?: any; onDi
         </svg>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="font-medium text-zinc-900">{message}</span>
-          <span className="font-mono text-zinc-500">{(score * 100).toFixed(0)}% synthetic</span>
-          <span className="text-zinc-400">· threshold {(threshold * 100).toFixed(0)}%</span>
+          <span className="font-mono text-zinc-500">{t('{p}% synthetic', { p: (score * 100).toFixed(0) })}</span>
+          <span className="text-zinc-400">· {t('threshold {t}%', { t: (threshold * 100).toFixed(0) })}</span>
         </div>
       </div>
     </div>

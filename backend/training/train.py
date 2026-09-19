@@ -53,8 +53,20 @@ def train_aasist(config: dict) -> None:
     optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
     scheduler = CosineAnnealingLR(optimizer, T_max=config.get("epochs", 100))
 
-    # Weighted BCE for class imbalance (spoof samples typically 9x bonafide)
-    pos_weight = torch.tensor([config.get("pos_weight", 9.0)]).to(device)
+    # ── Weighted BCE for class imbalance ────────────────────────────────
+    # pos_weight is auto-computed from the actual train-set ratio when the
+    # caller does not force one. (Old default 9.0 assumed ASVspoof's 9:1
+    # spoof:bonafide skew, which no longer matches the leak-free dataset.)
+    if config.get("pos_weight") is not None:
+        pos_weight_val = float(config["pos_weight"])
+    else:
+        from training.dataset import ASVspoofDataset
+        probe = ASVspoofDataset(config["train_dir"], config["train_protocol"])
+        n_s = max(1, sum(1 for _, l, _sr in probe.cache if l == 1))
+        n_b = max(1, sum(1 for _, l, _sr in probe.cache if l == 0))
+        pos_weight_val = n_b / n_s
+        logger.info(f"Auto pos_weight from train split: {n_b} bonafide / {n_s} spoof = {pos_weight_val:.3f}")
+    pos_weight = torch.tensor([pos_weight_val]).to(device)
     criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     # Data loaders
@@ -161,7 +173,8 @@ if __name__ == "__main__":
     parser.add_argument("--val_protocol", type=str, required=True)
     parser.add_argument("--save_dir", type=str, default="checkpoints")
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--pos_weight", type=float, default=9.0)
+    parser.add_argument("--pos_weight", type=float, default=None,
+                        help="Optional custom BCE positive-class weight (default: auto from data)")
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--pretrained_weights", type=str, default=None, help="Path to pretrained PyTorch model (.pth) to fine-tune")
     args = parser.parse_args()

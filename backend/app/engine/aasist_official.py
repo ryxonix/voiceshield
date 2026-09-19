@@ -25,7 +25,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]   # backend/
 _AASIST_REPO = _REPO_ROOT / "models" / "weights" / "aasist"
 _AASIST_WEIGHTS = _REPO_ROOT / "models" / "aasist_l_official.pth" # fallback
 _AASIST_WEIGHTS_ALT = _REPO_ROOT / "models" / "weights" / "aasist" / "AASIST-L.pth"
-_AASIST_WEIGHTS_ALT2 = Path(r"F:\voiceshield\backend\hf_models\aasist\models\weights\AASIST-L.pth")
+_AASIST_WEIGHTS_ALT2 = _REPO_ROOT / "hf_models" / "aasist" / "models" / "weights" / "AASIST-L.pth"
 
 _instance: Optional["AASISTOfficial"] = None
 

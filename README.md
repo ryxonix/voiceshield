@@ -1,190 +1,313 @@
 # 🛡️ VoiceShield AI
 
-**Zero-trust, real-time audio deepfake detection and mitigation platform optimized for the Indian telecom context.**
+**Zero-trust, real-time audio deepfake detection and mitigation platform for the Indian telecom context.**
 
-> All external services are **100% free** — no credit card required. Optimized for `.edu.in` student accounts.
+VoiceShield AI listens to live voice calls (or analyzes uploaded audio) and tells you in real time whether the speaker is a **real human** or a **synthetic/deepfake voice** (AI voice clone). It is built for use by telecom providers, banks, contact centers, and parents (Child Shield) — everything runs on a **free, open-licensed stack** (attribution licenses retained; full inventory in [`backend/SOURCES_AND_TECHNOLOGY.md`](backend/SOURCES_AND_TECHNOLOGY.md)).
+
+> 🔴 **SIH-ready** — all training data is from open licenses (FLEURS CC-BY-4.0, Common Voice CC-BY-4.0 — CC0 for v13 and earlier, self-generated TTS + **real voice-clone impersonation** via XTTS-v2/RVC/FreeVC). See [`backend/SOURCES_AND_TECHNOLOGY.md`](backend/SOURCES_AND_TECHNOLOGY.md) for full data sources, licenses, and compliance.
 
 ---
 
-## 🏗️ Architecture
+## 🧠 What it does (in one picture)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      React Dashboard (Vite)                     │
-│  Waveform │ Risk Gauge │ XAI Panel │ Child Shield │ Alerts     │
-└────────────────────────────┬────────────────────────────────────┘
-                             │ WebSocket (scores only, no audio)
-┌────────────────────────────┴────────────────────────────────────┐
-│                    FastAPI Backend (Python)                      │
-│                                                                  │
-│  ┌──────────┐  ┌───────────┐  ┌───────────┐  ┌──────────────┐  │
-│  │Ring Buffer│→│Feature Ext.│→│AASIST ONNX │→│ Risk Fusion  │  │
-│  │300ms/100ms│  │Jitter,    │  │INT8 ~85K   │  │0.7×M+0.3×XAI│  │
-│  │  hop      │  │Shimmer,   │  │params      │  │             │  │
-│  │           │  │Phase, f0  │  │<50ms CPU   │  │+ Watermark  │  │
-│  └──────────┘  └───────────┘  └───────────┘  └──────┬───────┘  │
-│                                                       │          │
-│  ┌────────────────────────────────────────────────────┴───────┐  │
-│  │              Role-Aware Mitigation Engine                  │  │
-│  │  Adult ≥0.85 → Risk Banner + Alerts                       │  │
-│  │  Child ≥0.70 → Mute + Shield Overlay + Alerts             │  │
-│  └────────────────────────┬───────────────────────────────────┘  │
-│                           │                                      │
-│  ┌────────────────────────┴───────────────────────────────────┐  │
-│  │         Multi-Channel Alert Dispatcher (ALL FREE)          │  │
-│  │  Telegram │ Gmail SMTP │ ntfy.sh │ Fast2SMS │ Webhook      │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌──────────────────────┐  ┌──────────────────────────────────┐  │
-│  │ I4C Forensic PDF     │  │ DPDP Act Compliance             │  │
-│  │ (ReportLab, IST)     │  │ Ephemeral RAM, Zero Disk        │  │
-│  └──────────────────────┘  └──────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
+Real Person OR AI Clone? ──▶ listen live / upload file
+        │
+        ▼
+┌────────────────────────────────────────────┐
+│  Detection Pipeline (backend/app/engine)    │
+│  • Acoustic DL models:                       │
+│      - Dhwani (Wav2Vec2 XLS-R + AASIST)      │   ← trained on Indian languages
+│      - AASIST-L official pretrained          │   ← ensemble
+│      - local AASIST-L (retrained, fallback)  │
+│  • XAI prosody layer:                        │
+│      jitter / shimmer / phase continuity     │
+│  • Cross-session speaker consistency         │
+│  • Enterprise watermark (VoLTE-band pilot)   │
+└────────────────────┬───────────────────────┘
+                     ▼
+   Risk Score (0–1)  ─▶  verdict + risk band
+                     ▼
+   Real-time alerts:  Telegram ・ Gmail ・ ntfy.sh
+                      Fast2SMS ・ Webhook
+                     ▼
+Incident log  ─▶  I4C-ready forensic PDF
+                      └── anchored on a proof-of-work
+                          PoW block + NBF-Fabric (Vishvasya)
+                          external anchor (hash + IPFS CID)
 ```
 
-## ✨ Features
+**Key ideas**
 
-- **AASIST-L Backbone** (~85K params) — Spectro-temporal graph attention for artifact detection
-- **Telecom-Hardened** — G.711, AMR-NB/WB, PLC, bandwidth truncation augmentations
-- **Sub-78ms Latency** — INT8 quantized ONNX inference on CPU
-- **Explainable AI** — Jitter, Shimmer, Phase Continuity, Pitch Stability
-- **Enterprise Watermark** — VoLTE-band (7.0–7.5 kHz) pilot tone verification
-- **Child Shield Protocol** — Lowered threshold (0.70), auto-mute, protective overlay
-- **I4C-Ready PDF Reports** — IST timestamps, legal next steps, forensic evidence format
-- **DPDP Act Compliant** — Ephemeral RAM processing, zero disk storage, scalar-only telemetry
-- **100% Free Stack** — Telegram, Gmail, ntfy.sh, Fast2SMS, all open-source
+- **Multi-layer detection, not one model.** Raw audio is scored by ensemble acoustic models AND by explainable prosodic features (jitter/shimmer/phase continuity). Both are combined: `score = 0.7 × model_prob + 0.3 × xai_risk`.
+- **Real-time by design.** Windows stream over WebSocket; model runs per window; only scalar scores cross the wire (no raw audio leaves the user's device/network — DPDP-safe).
+- **Free alerts everywhere.** Telegram, Gmail SMTP, ntfy.sh, Fast2SMS, and webhooks.
+- **Tamper-evident reports.** Every forensic PDF is hashed and anchored into a local proof-of-work blockchain ledger, then mirrored to a **Hyperledger Fabric (MeitY NBF-Lite)** external anchor with an **AES-256-GCM** ciphertext copy pinned on IPFS (raw forensic content never leaves operator custody — DPDP-safe).
 
-## 🚀 Quick Start
+---
+
+## ✨ Feature list
+
+| Area | What's included |
+|---|---|
+| Detection | Dhwani (multilingual Indian deepfake model) + AASIST-L official ensemble, INT8 ONNX inference on CPU |
+| Explainability | Jitter %, Shimmer %, Phase Continuity, Pitch Stability, noise-floor dropouts |
+| Real-time | Live call analysis over WebSocket, 3 s windows / 1 s hop (300 ms/100 ms fallback) |
+| Risk | Role-aware thresholds — Adult ≥ 0.85 critical, Child ≥ 0.70 critical |
+| Alerting | Telegram, Gmail SMTP, ntfy.sh, Fast2SMS, webhook — all optional |
+| Escalation | **Suspected** fraud → optional DoT conduct hand-off (Sanchar Saathi / Chakshu / DIP) via `CHAKSHU_DIP_WEBHOOK_URL`; **confirmed** fraud → I4C/1930 flow in the forensic PDF |
+| Child Shield | Lower threshold, auto-mute, protective overlay |
+| Forensics | I4C-ready PDF reports (IST timestamps, legal next steps) |
+| Integrity | SHA-256 + Merkle-root anchored to a PoW blockchain ledger |
+| NBF anchor | Every block also cryptographically anchored on a **MeitY National Blockchain Framework (Hyperledger Fabric)** ledger with IPFS-pinned AES-256-GCM ciphertext — local PoW chain stays authoritative, external anchor fails-open to 'pending' if the Fabric network is offline |
+| Speaker ID | Enrollment + cross-session voice-print consistency (one-way, DPDP-safe) |
+| Privacy | Ephemeral RAM processing, zero disk for raw audio, scalar-only telemetry |
+| i18n | Dashboard UI in English / हिन्दी / ಕನ್ನಡ (context-aware translations) |
+| Languages | Detection tuned for Hindi, English, Kannada (+ Tamil/Telugu/Malayalam via Dhwani) |
+
+---
+
+## 🚀 Quick start (5 minutes)
 
 ### Prerequisites
 
-- **Python 3.10+**
-- **Node.js 18+**
-- **ffmpeg** (optional, for AMR codec augmentation during training)
+- **Python 3.10+** and **Node.js 18+**
+- **ffmpeg** (optional — only needed for AMR codec augmentation during training)
 
-### Backend Setup
+### 1. Backend
 
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
-venv\Scripts\activate          # Windows
-# source venv/bin/activate     # Linux/Mac
+venv\Scripts\activate            # Windows
+# source venv/bin/activate       # Linux / Mac
 
-# Install dependencies (all free/open-source)
 pip install -r requirements.txt
-
-# Copy and configure environment
-copy .env.example .env
-# Edit .env with your free API keys (see below)
-
-# Export initial ONNX model (randomly initialized)
-python -m app.models.export_onnx
-
-# Start the server
-python -m app.main
-# or: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Frontend Setup
+### 2. Create the environment file and add your keys
+
+```bash
+copy .env.example .env           # Windows
+# cp .env.example .env           # Linux / Mac
+```
+
+> 📄 **Where do API keys go?** → **`backend/.env`** (this exact file). It is read by `backend/app/config.py` on startup, and it is already git-ignored so secrets are never committed.
+
+The `.env` has clearly-marked sections. Here is exactly what goes where:
+
+| What | Variable in `backend/.env` | Where to get it (all FREE) |
+|---|---|---|
+| Telegram alerts | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | https://t.me/BotFather |
+| Email alerts | `SMTP_USER`, `SMTP_PASSWORD`, `ALERT_EMAIL_TO` | Gmail App Password (2FA → Security → App Passwords) |
+| Push alerts | `NTFY_TOPIC` | https://ntfy.sh (no signup) |
+| SMS (India) | `FAST2SMS_API_KEY`, `FAST2SMS_TO_NUMBER` | https://www.fast2sms.com |
+| Webhook | `WEBHOOK_URL` | any endpoint you control |
+| Email API (alt) | `RESEND_API_KEY` | https://resend.com |
+| Error tracking | `SENTRY_DSN` | https://sentry.io |
+| Training data | `HF_TOKEN` | https://huggingface.co/settings/tokens (needed only for private gated repos; FLEURS is public) |
+| Database | `DATABASE_URL` | free serverless Neon PostgreSQL (optional — blank = in-memory store) |
+
+**Blockchain API keys** → the same file, section `⛓ BLOCKCHAIN REPORT LEDGER`:
+- The report ledger is **local and needs NO external key** (`BLOCKCHAIN_DIFFICULTY` is just the PoW difficulty, default 4).
+- `BLOCKCHAIN_RPC_URL`, `BLOCKCHAIN_EXPLORER_API_KEY`, `BLOCKCHAIN_ANCHOR_ADDRESS` are **optional** anchors if you later pin block hashes to a public chain.
+- **NBF-Lite external anchor** (default ON, demo mode): `BLOCKCHAIN_EXTERNAL_ANCHOR=false` runs a local `DemoAnchor` shadow so verification works offline. Set `BLOCKCHAIN_EXTERNAL_ANCHOR=true` + `NBF_GATEWAY_URL=http://<host>:4000` to push real Fabric/IPFS anchors through the gateway in [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — see the [NBF anchor section](#-nbf-anchor-network-meity-vishvasya) below.
+- Exactly one variable per line, restart the backend after editing.
+
+### 3. Start the backend
+
+```bash
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# API docs at  http://localhost:8000/docs
+```
+
+### 4. Start the frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start dev server
 npm run dev
-# Opens at http://localhost:5173
+# Dashboard at  http://localhost:5173
 ```
 
-### Free API Setup (All Optional)
+### 5. One-command start (Windows)
 
-| Service | Setup Steps | Time |
+Double-click **`start_all.bat`** (backend :8000 + frontend :5173).
+
+---
+
+## 🔌 REST API (all endpoints)
+
+| Method | Route | What it does |
 |---|---|---|
-| **Telegram** | Open Telegram → Message @BotFather → `/newbot` → Copy token | 1 min |
-| **Gmail SMTP** | Google Account → Security → 2FA → App Passwords → Generate | 2 min |
-| **ntfy.sh** | No setup! Just pick a topic name. Install app on phone for notifications | 0 min |
-| **Fast2SMS** | Sign up at fast2sms.com → Dashboard → API Key (free credits included) | 3 min |
+| POST | `/api/analyze` | Analyze an uploaded audio file (full windowed sweep) |
+| POST | `/api/detect` | Quick detection on a single audio payload |
+| WS | `/ws/live/{call_id}` | Live streaming detection during a call |
+| GET | `/api/sessions` | List sessions |
+| GET | `/api/sessions/{sid}` | Session detail |
+| GET | `/api/sessions/{sid}/windows` | Per-window telemetry |
+| GET | `/api/incidents` | List incidents |
+| GET | `/api/incidents/{iid}` / `.../ack` | Incident detail / acknowledge |
+| GET | `/api/incidents/{iid}/report` | Incident forensic PDF |
+| GET | `/api/report/{call_id}` | Forensic PDF by call id |
+| GET | `/api/blockchain` | Ledger status + all blocks |
+| GET | `/api/blockchain/{index}` | Single block |
+| GET | `/api/blockchain/verify/call/{call_id}` | Full tamper-evidence check |
+| GET | `/api/blockchain/verify/block/{index}` | PoW + hash integrity check |
+| POST | `/api/blockchain/retry/{call_id}` | Re-attempt a `pending` NBF-Fabric/IPFS anchor |
+| POST | `/api/speakers/register` | Enroll a speaker voice-print |
+| GET | `/health`, `/info` | Health / model status |
 
-## 📁 Project Structure
+---
+
+## 📁 Project structure
 
 ```
 voiceshield/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI entry point
-│   │   ├── config.py            # Pydantic settings
-│   │   ├── models/              # AASIST-L model
-│   │   │   ├── aasist.py        # PyTorch architecture
-│   │   │   ├── export_onnx.py   # ONNX export + INT8
-│   │   │   └── inference.py     # ONNX Runtime wrapper
-│   │   ├── engine/              # Detection engine
-│   │   │   ├── ring_buffer.py   # Streaming ring buffer
-│   │   │   ├── features.py      # Prosodic XAI extraction
-│   │   │   ├── watermark.py     # Watermark verifier
-│   │   │   ├── fusion.py        # Risk score fusion
-│   │   │   └── session.py       # Session state manager
-│   │   ├── streaming/
-│   │   │   └── websocket.py     # WebSocket endpoint
-│   │   ├── mitigation/
-│   │   │   ├── router.py        # Role-aware mitigation
-│   │   │   ├── child_shield.py  # Child Shield protocol
-│   │   │   └── alerts.py        # Multi-channel alerts
-│   │   ├── forensics/
-│   │   │   └── pdf_report.py    # I4C PDF generator
-│   │   └── compliance/
-│   │       └── dpdp.py          # DPDP Act compliance
-│   ├── training/                # Model training pipeline
-│   │   ├── augmentations.py     # Telecom codec augmentations
-│   │   ├── dataset.py           # ASVspoof dataset loader
-│   │   ├── train.py             # Training loop
-│   │   └── evaluate.py          # EER/t-DCF evaluation
-│   ├── tests/                   # Unit tests
-│   ├── models/                  # ONNX model files
-│   ├── requirements.txt
-│   └── .env.example
+│   │   ├── main.py              # FastAPI entry point (all REST endpoints)
+│   │   ├── config.py            # Pydantic settings ↔ backend/.env
+│   │   ├── models/              # AASIST-L architecture + ONNX inference + export
+│   │   ├── engine/              # dhwani, aasist_official, prosody, fusion,
+│   │   │                        #   ring_buffer, watermark, speaker, risk,
+│   │   │                        #   pipeline
+│   │   ├── streaming/           # WebSocket live-call endpoint
+│   │   ├── mitigation/          # Role-aware alerts (Telegram/SMTP/ntfy/Fast2SMS/webhook)
+│   │   ├── forensics/           # I4C-ready PDF reports
+│   │   ├── blockchain/          # PoW report ledger (local) + external NBF anchor
+│   │   │   │                    #   external_anchor.py (AES-256-GCM, IPFS, gateway)
+│   │   ├── compliance/          # DPDP Act posture helpers
+│   │   └── store.py             # In-memory / Neon persistence
+│   ├── training/                # augmentations, dataset, train, evaluate,
+│   │   │                        #   fetch_indic (FLEURS + TTS spoof), merge_protocols
+│   ├── models/                  # ONNX models (aasist_l, dhwani weights)
+│   ├── hf_models/aasist/        # official AASIST-L pretrained repo (MIT)
+│   ├── data/                    # training + evaluation audio (git-ignored)
+│   ├── checkpoints/             # trained weights + training_log.txt
+│   ├── .env.example             # ← copy to .env
+│   ├── .env                     # ← ADD YOUR API KEYS HERE
+│   ├── SOURCES_AND_TECHNOLOGY.md  # data licenses + tech inventory (SIH)
+│   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── components/          # React components
-│   │   ├── hooks/               # Custom hooks
-│   │   ├── App.jsx
-│   │   └── index.css            # Design system
-│   └── package.json
-└── README.md
+│   │   ├── pages/               # Dashboard, Incidents, Reports
+│   │   ├── components/          # RiskGauge, Radar, SessionCard, ShieldBanner, ui
+│   │   ├── i18n.tsx             # en / hi / kn translations
+│   │   └── ...
+└── start_all.bat                # starts backend + frontend
 ```
 
-## 🔒 Privacy & Compliance
+---
 
-This platform is designed for **DPDP Act (2023)** compliance:
+## 🎓 Training the model (SIH-compliant)
 
-- ✅ **Ephemeral Processing**: Audio buffers exist strictly in RAM, overwritten every 100ms
-- ✅ **Zero Disk Storage**: Raw audio is never written to disk or transmitted to cloud
-- ✅ **Minimized Telemetry**: Only mathematical sub-scores and scalar scores are transmitted
-- ✅ **Secure Cleanup**: All session buffers are cryptographically wiped on disconnect
-- ✅ **Audit Trail**: Only non-PII scalar data is logged (scores, timestamps, actions)
+Training uses **only open-license data**:
 
-## 📊 Latency Budget (per 100ms window step)
+- **Bonafide (real human voices)** — Google FLEURS (CC-BY-4.0) for Hindi / English / Kannada (+ Common Voice CC-BY-4.0 in the cloud pipeline).
+- **Spoof — REAL A.I. voice impersonation** — the cloud pipeline clones the *actual* bonafide speakers with **Coqui XTTS-v2** (CPML-1.0, research/non-commercial hackathon use) so the "attacker" speaks in the victim's cloned voice. **RVC / FreeVC** (MIT) add conversion-style clones. This targets the actual SIH problem (voice impersonation), not just robocall TTS. *⚠️ XTTS is non-commercial-only; a commercial production retrain should regenerate the spoof pool with MIT cloners (RVC/FreeVC/Chatterbox).*
+- **Auxiliary pure-TTS class** — edge-tts / gTTS (minority, ~9 Indian languages).
+- **Augmentations** — G.711, AMR-NB/WB, packet-loss, bandwidth, and noise that simulate Indian telecom networks.
 
-| Stage | Budget | Description |
-|---|---|---|
-| WebSocket Ingest | ≤ 5 ms | Binary PCM frame reception |
-| Ring Buffer | ≤ 2 ms | Sliding window accumulation |
-| Feature Extraction | ≤ 20 ms | Jitter, Shimmer, Phase, f0 |
-| AASIST ONNX (INT8) | ≤ 35 ms | Model inference on CPU |
-| Watermark Check | ≤ 5 ms | FFT pilot tone scan |
-| Risk Fusion | ≤ 1 ms | Score combination |
-| Mitigation Dispatch | ≤ 10 ms | Alert routing |
-| **Total** | **≤ 78 ms** | |
+### Option A — Cloud (recommended, free GPU, big corpus)
+
+See **[`cloud/`](cloud/README.md)** — ready-to-run Google Colab + Kaggle notebooks:
+
+```text
+colab_01_build_dataset.ipynb   # real voices + REAL XTTS/RVC/FreeVC clones → train/val CSVs
+colab_02_train_wav2vec2.ipynb  # wav2vec2-base audio classifier (fits free T4)
+colab_03_train_xlsr.ipynb      # XLSR-300m for best Indic cross-lingual accuracy
+kaggle_train_wav2vec2.py       # Kaggle equivalent
+```
+
+### Option B — On-device (CPU, small set, AASIST-L fallback)
+
+```bash
+cd backend
+# 1. (optional) fetch more data
+python -m training.fetch_indic --language hindi   --bonafide 200 --spoof 200 --out data/indic
+python -m training.fetch_indic --language english --bonafide 200 --spoof 200 --out data/indic
+python -m training.fetch_indic --language kannada --bonafide 200 --spoof 200 --out data/indic
+
+# 2. build the expanded SIH dataset (real speech + cloned/TTS spoofs)
+python -m training.build_sih_dataset --out data/indic --bonafide 200 --spoof 150
+python -m training.merge_protocols --data_dir data/indic --output data/indic/merged
+
+# 3. train AASIST-L
+python -m training.train --train_dir data/indic --train_protocol data/indic/merged_train.txt \
+                         --val_dir data/indic --val_protocol data/indic/merged_val.txt \
+                         --save_dir checkpoints --epochs 30
+
+# 4. export to ONNX + INT8
+python -m app.models.export_onnx checkpoints/best_model.pth
+```
+
+> ⚠️ The retrained local AASIST-L is the **fallback** detector. The primary production path uses the **Dhwani** and **official AASIST-L** pretrained models (loaded automatically when present).
+
+---
+
+> ⚠️ **Suspected vs confirmed fraud (two flows):** when the risk score crosses the
+> threshold, flagged-call **metadata** can be routed to the DoT side (Chakshu /
+> Sanchar Saathi / Digital Intelligence Platform) as **suspected** fraud for
+> network-level action (`CHAKSHU_DIP_WEBHOOK_URL`). If the user has actually
+> lost money / is a cyber-crime victim, the forensic PDF directs them to the
+> **confirmed** post-fraud reporting path — **1930 helpline / cybercrime.gov.in /
+> RBI Sachet** (`https://sachet.rbi.org.in`). Chakshu/DIP are citizen-facing
+> portals (no public API) — the webhook is *your* documented integration point.
+
+---
+
+## 🔒 Privacy & compliance (DPDP Act 2023)
+
+- ✅ Ephemeral processing — audio buffers live in RAM, overwritten every window
+- ✅ Zero disk storage — raw audio is never written to disk by the live path
+- ✅ Minimized telemetry — only scalar sub-scores cross the wire/WebSocket
+- ✅ One-way speaker embeddings — audio can never be reconstructed
+- ✅ Audit trail — non-PII scalar data only
+
+---
+
+## 📊 Latency budget (per window)
+
+| Stage | Budget |
+|---|---|
+| WebSocket ingest + ring buffer | ≤ 7 ms |
+| Prosodic feature extraction | ≤ 20 ms |
+| Model inference (INT8 CPU ONNX) | ≤ 35 ms |
+| Watermark + fusion + mitigation | ≤ 16 ms |
+| **Total** | **≤ 78 ms** |
+
+---
+
+## ⛓ NBF anchor network (MeitY Vishvasya)
+
+Every locally-mined report block is **also** committed to a permissioned **Hyperledger Fabric** ledger through an NBF-Lite-compatible REST gateway, with the report PDF stored on **IPFS as ciphertext**.
+
+```
+Forensic PDF ──▶ AES-256-GCM ──▶ IPFS /store ──▶ CID
+                                      │
+Local PoW block ──▶ NBF gateway ──▶ Fabric chaincode anchorReport
+                  (block_hash, merkle_root, file_sha256,
+                   ipfs_cid, enc_alg, key_fp)
+```
+
+- **Private by design**: only hashes / CID / key fingerprint go on the ledger; the raw PDF stays encrypted under an operator-held master key (`reports/keys/org_master.key`). Ciphertext is pinned to IPFS so the full record is recoverable and tamper-evident without exposing voice content.
+- **Fail-open**: if the Fabric network is offline the local PoW chain remains authoritative and the anchor row is marked `pending` (retryable via `POST /api/blockchain/retry/{call_id}`). The `DemoAnchor` provider records the same payload locally so offline demos are truthful (`demo`, never `anchored`).
+- **Deploy** (free tier): see [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — `docker compose up -d` on Oracle Cloud **ARM A1 free tier** (IPFS + Fabric 2.2 peer/orderer/CA + trimmed `nbf-samplerest` gateway + `voiceshield-report.go` chaincode) or **WSL2 Ubuntu** on a laptop. Zero cloud spend either way.
+- **Ministry alignment**: MeitY's National Blockchain Framework (Vishvasya, CDAC/MeitY) is the same substrate NBF-Lite kits teach; anchors at NIC DCs (Bhubaneswar/Pune/Hyderabad) have already authenticated 34 Cr+ documents, and the same framework is being used for telecom blockchain (SMS/Spam enforcement across 1.13 L entities with RBI/SEBI/NIC/C-DAC).
+
+---
 
 ## 📜 License
 
-MIT License — Free for academic and commercial use.
+The VoiceShield AI code is **MIT**. Third-party components used and their licenses are documented in [`backend/SOURCES_AND_TECHNOLOGY.md`](backend/SOURCES_AND_TECHNOLOGY.md).
 
 ## 🙏 Acknowledgments
 
-- AASIST architecture: Jung et al., "AASIST: Audio Anti-Spoofing using Integrated Spectro-Temporal Graph Attention Networks" (ICASSP 2022)
-- ASVspoof Challenge for benchmark datasets
-- Indian Cyber Crime Coordination Centre (I4C) for forensic reporting standards
+- AASIST: Jung et al., *Audio Anti-Spoofing using Integrated Spectro-Temporal Graph Attention Networks* (ICASSP 2022)
+- Dhwani: Ayush2635, *Multilingual Deepfake Audio Detection* (Wav2Vec2 XLS-R + AASIST)
+- FLEURS: Google, CC-BY-4.0
+- Indian Cyber Crime Coordination Centre (I4C) forensic reporting standards
+- **Dept. of Telecommunications — Sanchar Saathi / Chakshu / Digital Intelligence Platform (DIP)**: downstream "suspected fraud" escalation reference (citizen-facing; we integrate via our own documented webhook, no public API)
+- **RBI Sachet** (`https://sachet.rbi.org.in`): reporting of suspected unauthorised financial entities, referenced in the forensic PDF
+- **IndiaAI Mission (MeitY)**: compute/dataset-grant program for public-interest AI — referenced as a training-capacity pathway (no API)

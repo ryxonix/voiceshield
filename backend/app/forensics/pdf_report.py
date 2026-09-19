@@ -235,6 +235,7 @@ def generate_forensic_pdf(
         "Call the Cybercrime Helpline: <b>1930</b> (available 24/7)",
         "Contact your local <b>Cyber Police Station</b> with this report",
         "For financial fraud: Contact your <b>bank immediately</b> and file an RBI complaint",
+        "For suspected unauthorised financial apps/entities: report on the <b>RBI Sachet</b> portal (<b>https://sachet.rbi.org.in</b>)",
         "Preserve this report as evidence — <b>do not modify</b>",
     ]
     for step in legal_steps:
@@ -258,13 +259,22 @@ def generate_forensic_pdf(
             f"Chain             : {blockchain.get('chain_id', 'VoiceShieldAIV1')}",
             f"Report call       : {call}",
             f"Verification API  : GET /api/blockchain/verify/call/{call}",
+            f"Fabric/IPFS check : GET /api/blockchain/onchain/{call}",
         ]
         elements.append(Paragraph("<br/>".join(anchor_lines), anchor_style))
         elements.append(Paragraph(
             "<i>This report and its per-window evidence are cryptographically committed to a "
             "tamper-evident hash chain (SHA-256 + proof-of-work). The chain record stores this "
             "file's SHA-256 together with a Merkle root of the score timeline; any modification "
-            "to the report invalidates verification.</i>",
+            "to the report invalidates verification.\n\n"
+            "When the NBF-Lite external anchor is enabled, an encrypted copy of this PDF is "
+            "pinned to IPFS (raw ciphertext stays under operator custody) and the block hash, "
+            "Merkle root, file SHA-256, IPFS CID and key fingerprint are recorded on the "
+            "Hyperledger Fabric ledger. Verify the public anchor with "
+            "GET /api/blockchain/onchain/{call_id} — it fetches the on-chain record, pulls and "
+            "decrypts the IPFS copy using the org-derived report key, recomputes the SHA-256 and "
+            "confirms a %PDF document. Fail-open: the local PoW chain remains authoritative if "
+            "the Fabric node is unreachable.</i>",
             normal_style,
         ))
 

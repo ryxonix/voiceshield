@@ -14,6 +14,7 @@ import os
 import tempfile
 import time
 from contextlib import asynccontextmanager
+from typing import Optional
 
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, Query
@@ -235,7 +236,7 @@ def _process_windowed(audio_float: np.ndarray, role: str = "adult", max_windows:
     peak = 0.0
 
     for idx, frame in enumerate(frames):
-        ev = analyze_window(frame, role=role)
+        ev = analyze_window(frame, role=role, include_xlsr=True)
         t_ms = idx * step_ms
         peak = max(peak, ev["synthetic_score"])
         windows.append(
@@ -554,9 +555,11 @@ async def blockchain_status():
                 "merkle_root": b["merkle_root"],
                 "timestamp": b["timestamp"],
                 "nonce": b["nonce"],
+                "external_anchor": _anchor_summary(b["block_index"]),
             }
             for b in store.list_blocks()
         ],
+        "external_anchor": _anchor_summary(None),
     }
 
 
@@ -600,6 +603,123 @@ async def blockchain_verify_block(index: int):
         "problems": problems,
         "block": block,
     }
+
+
+@app.get("/api/blockchain/onchain/{call_id}", tags=["blockchain"])
+async def blockchain_onchain_call(call_id: str):
+    """Live NBF-Fabric + IPFS verification for a report's external anchor.
+
+    Queries the chaincode record for the call, compares it to the local
+    PoW block, retrieves the pinned ciphertext from IPFS, decrypts it with
+    the org-derived report key, and confirms the decrypted document matches
+    the anchored SHA-256 (and looks like a PDF). Fail-open: local chain is
+    authoritative; any unreachable service is reported, not fatal.
+    """
+    from app.blockchain import external_anchor
+
+    return external_anchor.verify_anchor(call_id)
+
+
+@app.get("/api/blockchain/onchain", tags=["blockchain"])
+async def blockchain_onchain():
+    """External-anchor status for every locally-mined report block.
+
+    `verifiable` lists calls whose anchors are 'anchored' (a Fabric node is
+    reachable), `pending_demo` the offline demo/pending rows, so operators can
+    see at a glance which reports have a public, cross-verifiable anchor.
+    """
+    from app import store
+    from app.blockchain import external_anchor
+
+    verifiable = []
+    pending_demo = []
+    for b in store.list_blocks():
+        summary = _anchor_summary(b["block_index"])
+        status = summary.get("anchor_status", "not_anchored")
+        row = {
+            "call_id": b["call_id"],
+            "block_index": b["block_index"],
+            "block_hash": b["block_hash"],
+            "file_sha256": b["file_sha256"],
+            "anchor_status": status,
+            "provider": summary.get("provider"),
+            "ipfs_cid": summary.get("ipfs_cid"),
+            "tx_id": summary.get("tx_id"),
+        }
+        if status == "anchored":
+            verifiable.append(row)
+        elif status in ("pending", "demo", "not_anchored"):
+            pending_demo.append(row)
+    return {
+        "gateway_url": external_anchor._gateway_base() or None,
+        "external_anchor": _anchor_summary(None),
+        "verifiable": verifiable,
+        "pending_demo": pending_demo,
+    }
+# ---- External anchor helpers (NBF-Lite / Fabric) ------------------------
+
+def _anchor_summary(block_index: Optional[int] = None) -> dict:
+    """Collapse persisted external-anchor state for a block or the whole chain."""
+    try:
+        if block_index is None:
+            rows = _store_fetch_anchors()
+            statuses = [r.get("anchor_status", "pending") for r in rows]
+            return {
+                "enabled": _store_anchor_enabled(),
+                "count": len(rows),
+                "anchored": statuses.count("anchored"),
+                "demo": statuses.count("demo"),
+                "pending": statuses.count("pending"),
+            }
+        row = _store.get_block_anchor(block_index)
+        if row is None:
+            return {"anchor_status": "not_anchored", "provider": None, "ipfs_cid": None}
+        return {
+            "anchor_status": row.get("anchor_status"),
+            "provider": row.get("provider"),
+            "ipfs_cid": row.get("ipfs_cid"),
+            "key_fp": row.get("key_fp"),
+            "tx_id": row.get("tx_id"),
+            "error": row.get("error"),
+        }
+    except Exception as e:  # pragma: no cover - defensive
+        return {"anchor_status": "unavailable", "error": f"{type(e).__name__}: {e}"}
+
+
+def _store_fetch_anchors():
+    import sqlite3
+
+    conn = _store._connect()
+    try:
+        rows = conn.execute("SELECT anchor_status FROM block_anchors").fetchall()
+        return [dict(r) for r in rows]
+    except sqlite3.OperationalError:
+        return []
+    finally:
+        conn.close()
+
+
+def _store_anchor_enabled() -> bool:
+    from app.blockchain.external_anchor import get_provider
+
+    try:
+        return get_provider().name != "demo"
+    except Exception:
+        return False
+
+
+@app.post("/api/blockchain/retry/{call_id}", tags=["blockchain"])
+async def blockchain_retry_anchor(call_id: str):
+    """Re-attempt the external Fabric/IPFS anchor for a pending report block."""
+    from app.blockchain import external_anchor, ledger
+
+    block = _store.get_block_by_call(call_id)
+    if block is None:
+        return JSONResponse(status_code=404, content={"error": f"No block found for call '{call_id}'. Generate a report first."})
+    if not external_anchor.get_provider().__class__.__name__ == "I4CAnchor":
+        return JSONResponse(status_code=400, content={"error": "External anchor disabled (BLOCKCHAIN_EXTERNAL_ANCHOR=false)."})
+    result = external_anchor.retry_anchor(block)
+    return result
 
 
 # ── Speaker Enrollment ─────────────────────────────────────────────────────

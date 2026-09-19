@@ -55,6 +55,48 @@ class Settings(BaseSettings):
     # ── Alerts — Webhook (free, self-hosted) ───────────────────────────
     webhook_url: str = ""
 
+    # ── Escalation — DoT Sanchar Saathi / Chakshu / DIP (suspected fraud) ──
+    # Optional downstream hand-off point. When set, an alert that crosses the
+    # detection threshold is ALSO posted here as "suspected fraud" metadata so
+    # an operator/telecom can route it to the Digital Intelligence Platform
+    # (DIP) for network-level action. This complements (not replaces) the
+    # post-fraud I4C/1930 flow already embedded in the forensic PDF.
+    # NOTE: Chakshu/DIP are citizen-facing DoT portals (no public API); this
+    # is a documented integration point on YOUR side that feeds them.
+    chakshu_dip_webhook_url: str = ""
+
+    # ── Blockchain Ledger ──────────────────────────────────────────────
+    # The report ledger is a local proof-of-work hash chain — NO external
+    # API key is required to run it. The fields below are OPTIONAL anchors
+    # if you later want to pin a block hash to a public chain (e.g. for the
+    # I4C / judiciary hand-off path).
+    blockchain_difficulty: int = 4   # PoW leading-zero requirement
+    blockchain_rpc_url: str = ""     # optional public-chain RPC anchor
+    blockchain_explorer_api_key: str = ""  # optional explorer API key
+    blockchain_anchor_address: str = ""    # optional on-chain anchor addr
+    # NBF-Lite / MeitY National Blockchain Framework external anchor (optional).
+    # When blockchain_external_anchor=True, every locally-minied report block is
+    # additionally committed to a Hyperledger Fabric ledger (via a REST gateway)
+    # and its encrypted PDF pushed to IPFS. Fail-open: if the gateway is
+    # unreachable the local PoW chain remains authoritative and the anchor is
+    # marked 'pending' (retryable).
+    blockchain_external_anchor: bool = False
+    nbf_gateway_url: str = ""          # e.g. http://<fabric-gateway-host>:4000
+    nbf_channel: str = "mychannel"
+    nbf_cc: str = "voiceshield-report"
+    nbf_user: str = "User1"
+    nbf_msp: str = "Org1MSP"
+    nbf_cfgpath: str = ""
+    # How /retrieve payloads are decoded to the anchor ciphertext. NBFLite's
+    # sample gateway pins the base64 *text* under the CID while our trimmed
+    # gateway pins the decoded raw bytes (different CID, different fetch shape).
+    #   auto        -> self-detect per fetch (raw first, then base64-text)
+    #   raw         -> our gateway (decoded bytes; body data is the cipher b64)
+    #   base64text  -> NBFLite sample gateway (body data is base64 of the text)
+    nbf_ipfs_mode: str = "auto"
+    ipfs_store_url: str = ""           # defaults to {gateway}/store
+    report_keys_dir: str = ""          # org-custody key manifests / master key
+
     # ── Server ─────────────────────────────────────────────────────────
     host: str = "0.0.0.0"
     port: int = 8000
@@ -70,8 +112,6 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
 
     hf_token: str = ""
-
-    blockchain_difficulty: int = 4   # PoW leading-zero requirement for report anchors
 
     model_config = {
         "env_file": ".env",

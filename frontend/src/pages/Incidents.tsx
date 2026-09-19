@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Breadcrumbs, PageHeader, Divider, apiBase, btn } from '../components/ui'
+import { useT } from '../i18n'
 
 export default function Incidents() {
+  const t = useT()
   const [incidents, setIncidents] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [ackBusy, setAckBusy] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -12,10 +15,14 @@ export default function Incidents() {
 
   const load = async () => {
     setLoading(true)
+    setError(null)
     try {
       const r = await fetch(`${apiBase()}/api/incidents`)
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
       const xs = await r.json()
       setIncidents(Array.isArray(xs) ? xs : [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('Failed to load incidents'))
     } finally {
       setLoading(false)
     }
@@ -24,8 +31,11 @@ export default function Incidents() {
   const ack = async (id: string) => {
     setAckBusy((prev) => new Set(prev).add(id))
     try {
-      await fetch(`${apiBase()}/api/incidents/${id}/ack`, { method: 'POST' })
+      const r = await fetch(`${apiBase()}/api/incidents/${id}/ack`, { method: 'POST' })
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
       setIncidents((prev) => prev.map((i) => (i.id === id ? { ...i, acknowledged: true } : i)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('Failed to acknowledge incident'))
     } finally {
       setAckBusy((prev) => {
         const next = new Set(prev)
@@ -38,13 +48,13 @@ export default function Incidents() {
   const severityLabel = (s: string) => {
     switch (s) {
       case 'critical':
-        return 'Critical'
+        return t('sev.critical')
       case 'high':
-        return 'High'
+        return t('sev.high')
       case 'medium':
-        return 'Medium'
+        return t('sev.medium')
       default:
-        return s
+        return t('sev.low')
     }
   }
 
@@ -70,22 +80,28 @@ export default function Incidents() {
 
   return (
     <article className={empty ? '' : ''}>
-      <Breadcrumbs trail={['Risk & incidents', 'Incident log']} />
+      <Breadcrumbs trail={[t('Risk & incidents'), t('Incident log')]} />
       <PageHeader
-        title="Incident log"
-        meta="Threshold crossings are recorded as incidents with severity, triggers and a forensic I4C report. Acknowledge incidents once they’ve been reviewed."
+        title={t('Incident log')}
+        meta={t('Threshold crossings are recorded as incidents with severity, triggers and a forensic I4C report. Acknowledge incidents once they’ve been reviewed.')}
         actions={
           <button className={btn()} onClick={load} disabled={loading}>
-            {loading ? 'Loading…' : 'Refresh'}
+            {loading ? t('Loading…') : t('Refresh')}
           </button>
         }
       />
       <Divider />
 
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+          {t('Error: {e}', { e: error })}
+        </div>
+      )}
+
       {empty ? (
         <div className="card p-10 text-center">
           <p className="text-[13.5px] text-zinc-500">
-            No incidents recorded yet. Run a live monitor session or upload a recording to see incidents here.
+            {t('No incidents recorded yet. Run a live monitor session or upload a recording to see incidents here.')}
           </p>
         </div>
       ) : (
@@ -110,27 +126,27 @@ export default function Incidents() {
                     className="rounded-full border border-[#E4E4E7] bg-white px-3 py-1 text-[12px] font-medium text-zinc-800 transition-colors hover:bg-[#F1EEE9]"
                     href={`${apiBase()}/api/incidents/${inc.id}/report`}
                   >
-                    I4C report
+                    {t('I4C report')}
                   </a>
                   {inc.acknowledged ? (
-                    <span className="text-[12px] font-medium text-zinc-500">Acknowledged</span>
+                    <span className="text-[12px] font-medium text-zinc-500">{t('Acknowledged')}</span>
                   ) : (
                     <button
                       className="rounded-full border border-zinc-900 bg-zinc-900 px-3 py-1 text-[12px] font-medium text-white transition-colors hover:bg-zinc-700"
                       disabled={ackBusy.has(inc.id)}
                       onClick={() => ack(inc.id)}
                     >
-                      {ackBusy.has(inc.id) ? 'Ack…' : 'Acknowledge'}
+                      {ackBusy.has(inc.id) ? t('Ack…') : t('Acknowledge')}
                     </button>
                   )}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-[11.5px] text-zinc-500">
-                <span>role {inc.role}</span>
-                <span>lang {inc.language}</span>
+                <span>{t('role {r}', { r: inc.role })}</span>
+                <span>{t('lang {l}', { l: inc.language })}</span>
                 <span>{created_at(inc.created_at)}</span>
-                {inc.speaker_mismatch && <span className="font-semibold text-[#C2410C]">speaker mismatch</span>}
-                {inc.triggers?.length ? <span className="text-zinc-400">triggers: {inc.triggers.join(', ')}</span> : null}
+                {inc.speaker_mismatch && <span className="font-semibold text-[#C2410C]">{t('speaker mismatch')}</span>}
+                {inc.triggers?.length ? <span className="text-zinc-400">{t('triggers: {t}', { t: inc.triggers.join(', ') })}</span> : null}
               </div>
             </article>
           ))}

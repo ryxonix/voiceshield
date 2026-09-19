@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useT } from '../i18n'
 
 /** Radar of the optional XAI axes from spec §4.2:
  *  - Pitch Stability %        : inverse-scaled jitter
@@ -6,17 +7,18 @@ import { useMemo } from 'react'
  *  - Noise-Floor Dropouts %  : capped + inverted so high dropouts → low score
  */
 export function Radar({ ev, pfDropoutsMax = 8 }: { ev: any; pfDropoutsMax?: number }) {
+  const t = useT()
   const p = (ev && ev.prosody) || {}
   const pitchStability = p.pitch_stability ?? 0
   const phaseContinuity = p.phase_continuity != null ? p.phase_continuity * 100 : 50
   const nfDropouts = p.noise_floor_dropouts != null ? p.noise_floor_dropouts : 0
   const items = useMemo(
     () => [
-      { label: 'Pitch Stability', value: pitchStability, color: '#2563EB' },
-      { label: 'Phase Continuity', value: phaseContinuity, color: '#7c5cbf' },
-      { label: 'NF Dropouts', value: 100 - Math.min(100, (nfDropouts / pfDropoutsMax) * 100), color: '#b45309' },
+      { label: t('Pitch Stability'), value: pitchStability, color: '#2563EB' },
+      { label: t('Phase Continuity'), value: phaseContinuity, color: '#7c5cbf' },
+      { label: t('NF Dropouts'), value: 100 - Math.min(100, (nfDropouts / pfDropoutsMax) * 100), color: '#b45309' },
     ],
-    [pitchStability, phaseContinuity, nfDropouts, pfDropoutsMax],
+    [pitchStability, phaseContinuity, nfDropouts, pfDropoutsMax, t],
   )
 
   const cx = 4, cy = 4, R = 3.25
@@ -27,9 +29,9 @@ export function Radar({ ev, pfDropoutsMax = 8 }: { ev: any; pfDropoutsMax?: numb
       <div className="space-y-2">
         {items.map((it) => (
           <div key={it.label}>
-            <div className="flex justify-between text-[12.5px]">
-              <span className="text-zinc-800">{it.label}</span>
-              <span className="font-mono text-zinc-500">{it.value.toFixed(0)}%</span>
+            <div className="flex justify-between gap-2 text-[12.5px]">
+              <span className="min-w-0 truncate text-zinc-800">{it.label}</span>
+              <span className="shrink-0 font-mono text-zinc-500">{it.value.toFixed(0)}%</span>
             </div>
             <div className="mt-1 h-[3px] rounded-full bg-[#F1EEE9]">
               <div

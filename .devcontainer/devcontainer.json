@@ -1,0 +1,25 @@
+{
+  "name": "voiceshield-nbf",
+  "image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:2": {
+      "moby": true,
+      "version": "latest"
+    }
+  },
+  "forwardPorts": [4000, 8000],
+  "portsAttributes": {
+    "4000": {
+      "label": "NBF gateway",
+      "onAutoForward": "notify",
+      "visibility": "public"
+    },
+    "8000": {
+      "label": "VoiceShield backend",
+      "onAutoForward": "notify",
+      "visibility": "private"
+    }
+  },
+  "postCreateCommand": "docker --version && docker compose version",
+  "remoteUser": "codespace"
+}

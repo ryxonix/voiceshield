@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { LANGS, LANG_NAMES, useI18n, useT } from '../i18n'
 
 function readEnvBaseTrimmed(): string {
   const env = (import.meta as any).env ?? {}
@@ -78,17 +79,10 @@ export function BrandMark({ size = 26 }: { size?: number }) {
 export function TopBar({
   right,
   onNav,
-  active,
 }: {
   right?: React.ReactNode
   onNav?: (id: string) => void
-  active?: string
 }) {
-  const links = [
-    { id: 'dashboard', label: 'Live Monitor' },
-    { id: 'incidents', label: 'Incidents' },
-    { id: 'reports', label: 'Forensics' },
-  ]
   return (
     <header className="sticky top-0 z-30 border-b border-[#E4E4E7] bg-[#FAF8F5]/90 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-[1400px] items-center justify-between px-6">
@@ -98,28 +92,14 @@ export function TopBar({
             VoiceShield <span className="font-serif font-semibold italic">AI</span>
           </span>
         </button>
-        <div className="flex items-center gap-6">
-          <nav className="hidden items-center gap-5 md:flex">
-            {links.map((l) => (
-              <button
-                key={l.id}
-                onClick={() => onNav?.(l.id)}
-                className={`text-[14px] transition-opacity hover:opacity-70 ${
-                  active === l.id ? 'font-semibold text-zinc-900' : 'font-medium text-zinc-600'
-                }`}
-              >
-                {l.label}
-              </button>
-            ))}
-          </nav>
-          {right ?? <SettingsMenu />}
-        </div>
+        <div className="flex items-center gap-6">{right ?? <SettingsMenu />}</div>
       </div>
     </header>
   )
 }
 
 function SettingsMenu() {
+  const { lang, setLang } = useI18n()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -136,21 +116,24 @@ function SettingsMenu() {
         className="flex items-center gap-1.5 rounded-full border border-[#E4E4E7] bg-white px-3.5 py-1.5 text-[13px] font-medium text-zinc-800 transition-colors hover:bg-[#F1EEE9]"
       >
         <Globe />
-        English
+        {LANG_NAMES[lang]}
         <Caret />
       </button>
       {open && (
         <div className="rise absolute right-0 mt-2 w-48 rounded-xl border border-[#E4E4E7] bg-white p-1.5 shadow-lg shadow-zinc-900/5">
-          {['English', 'हिन्दी', 'ಕನ್ನಡ'].map((l, i) => (
+          {LANGS.map((l) => (
             <button
               key={l}
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                setLang(l)
+                setOpen(false)
+              }}
               className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-[13px] transition-colors hover:bg-[#F1EEE9] ${
-                i === 0 ? 'font-semibold text-zinc-900' : 'text-zinc-700'
+                l === lang ? 'font-semibold text-zinc-900' : 'text-zinc-700'
               }`}
             >
-              {l}
-              {i === 0 && <span className="text-[#2563EB]">●</span>}
+              {LANG_NAMES[l]}
+              {l === lang && <span className="text-[#2563EB]">●</span>}
             </button>
           ))}
         </div>
@@ -313,6 +296,7 @@ type HookReturn = {
 }
 
 export function useLiveSession(): HookReturn {
+  const t = useT()
   const [connected, setConnected] = useState(false)
   const [events, setEvents] = useState<any[]>([])
   const [micActive, setMicActive] = useState(false)
@@ -357,7 +341,7 @@ export function useLiveSession(): HookReturn {
       setConnected(true)
       setError(null)
     }
-    ws.onerror = () => setError('WebSocket error — is the backend running on :8000?')
+    ws.onerror = () => setError(t('WebSocket error — is the backend running on :8000?'))
     ws.onclose = () => {
       setConnected(false)
       setShielded(false)
@@ -390,7 +374,7 @@ export function useLiveSession(): HookReturn {
             } catch { /* context may already be running */ }
           }
           if (ctx.state !== 'running') {
-            setError('Microphone context could not start — allow mic permission and retry.')
+            setError(t('Microphone context could not start — allow mic permission and retry.'))
             return
           }
           const src = ctx.createMediaStreamSource(stream)
@@ -415,10 +399,10 @@ export function useLiveSession(): HookReturn {
         })
         .catch((e) => {
           setMicActive(false)
-          setError(`Microphone unavailable — ${e instanceof Error ? e.message : 'permission denied'}`)
+          setError(t('Microphone unavailable — {e}', { e: e instanceof Error ? e.message : 'permission denied' }))
         })
     } catch (e) {
-      setError(`Audio init failed — ${e instanceof Error ? e.message : String(e)}`)
+      setError(t('Audio init failed — {e}', { e: e instanceof Error ? e.message : String(e) }))
     }
   }
 

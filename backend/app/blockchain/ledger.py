@@ -164,6 +164,19 @@ def anchor_report(
     )
     block["file_path"] = file_path
     store.insert_block(**block)
+
+    # Optional I4C / NBF-Lite external anchor: commit the block hash + the
+    # report's IPFS ciphertext CID to a Hyperledger Fabric ledger. Fail-open:
+    # local chain stays authoritative; anchor marked pending if gateway is down.
+    try:
+        from app.blockchain import external_anchor
+
+        external = external_anchor.anchor_block(block)
+        block["external_anchor"] = external
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning(f"External anchor hook failed: {e}")
+        block["external_anchor"] = {"anchor_status": "pending", "error": f"{type(e).__name__}: {e}"}
+
     return block
 
 
@@ -251,6 +264,15 @@ def verify_report(call_id: str) -> Dict[str, Any]:
     if not chain["valid"]:
         problems.append("ledger integrity check failed")
 
+    try:
+        from app.blockchain import external_anchor
+
+        ext = external_anchor.anchor_status_for_call(call_id)
+        if ext.get("anchor_status") in ("anchored", "demo"):
+            ext["onchain_verification"] = external_anchor.verify_anchor(call_id, block)
+    except Exception as e:  # pragma: no cover - defensive
+        ext = {"anchor_status": "unavailable", "error": f"{type(e).__name__}: {e}"}
+
     return {
         "valid": not problems,
         "chain_id": chain["chain_id"],
@@ -259,4 +281,5 @@ def verify_report(call_id: str) -> Dict[str, Any]:
         "problems": problems,
         "current_file_sha256": file_hash or None,
         "anchored_file_sha256": block["file_sha256"],
+        "external_anchor": ext,
     }
