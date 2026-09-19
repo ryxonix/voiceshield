@@ -63,8 +63,11 @@ services:
       - ORDERER_GENERAL_LOCALMSPID=OrdererMSP
       - ORDERER_GENERAL_LOCALMSPDIR=/etc/hyperledger/msp
       - ORDERER_GENERAL_TLS_ENABLED=false
+      - ORDERER_GENERAL_BOOTSTRAPMETHOD=file
+      - ORDERER_GENERAL_GENESISFILE=/var/hyperledger/orderer/orderer.genesis.block
     volumes:
       - ./crypto-config/ordererOrganizations/vsh.example.com/orderers/orderer/msp:/etc/hyperledger/msp
+      - ./channel-artifacts/genesis.block:/var/hyperledger/orderer/orderer.genesis.block
     networks:
       default:
         aliases:
