@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Breadcrumbs, PageHeader, Divider, apiBase, btn } from '../components/ui'
 import { useT } from '../i18n'
 
@@ -9,11 +9,7 @@ export default function Incidents() {
   const [error, setError] = useState<string | null>(null)
   const [ackBusy, setAckBusy] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    load()
-  }, [])
-
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -26,7 +22,11 @@ export default function Incidents() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [t])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   const ack = async (id: string) => {
     setAckBusy((prev) => new Set(prev).add(id))

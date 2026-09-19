@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     onnx_model_path: str = "models/aasist_l.onnx"
     onnx_threads: int = 2
 
+    @property
+    def onnx_model_resolved(self) -> str:
+        """Resolve relative model paths against the backend root, so the app
+        works regardless of the current working directory."""
+        import os
+        path = self.onnx_model_path
+        if not path or os.path.isabs(path):
+            return path
+        backend_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.normpath(os.path.join(backend_root, path))
+
     # ── Detection Thresholds ───────────────────────────────────────────
     adult_threshold: float = 0.85
     child_threshold: float = 0.70
@@ -45,7 +56,9 @@ class Settings(BaseSettings):
     alert_email_to: str = ""         # Recipient address
 
     # ── Alerts — ntfy.sh (free, open-source, no signup) ────────────────
-    ntfy_topic: str = "voiceshield-alerts"
+    # Opt-in: set a unique topic to enable push notifications. Default empty
+    # so no traffic is sent to shared topics until configured.
+    ntfy_topic: str = ""
     ntfy_server: str = "https://ntfy.sh"
 
     # ── Alerts — Fast2SMS (free tier, Indian SMS gateway, optional) ────

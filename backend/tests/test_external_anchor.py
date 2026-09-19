@@ -218,6 +218,8 @@ class TestOnchainVerification:
         cipher = self._cipher(ea, block["call_id"], pdf)
 
         def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
             if "querycc" in str(request.url):
                 return httpx.Response(200, json={"result": self._onchain_payload(block)})
             if "retrieve" in str(request.url):
@@ -240,6 +242,8 @@ class TestOnchainVerification:
             fh.write(b"%PDF-1.4 TAMPERED CONTENT")
 
         def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
             if "querycc" in str(request.url):
                 return httpx.Response(200, json={"result": self._onchain_payload(block)})
             if "retrieve" in str(request.url):
@@ -256,6 +260,8 @@ class TestOnchainVerification:
         ea, block, pdf = self._seed(tmp_path, monkeypatch)
 
         def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
             if "querycc" in str(request.url):
                 forged = json.dumps(
                     {
@@ -309,6 +315,41 @@ class TestOnchainVerification:
         assert res2["anchor_status"] == "pending"
         assert res2["verified"] is False
         assert any("nothing on-chain" in p for p in res2["problems"])
+
+
+    def test_stale_anchor_detected(self, tmp_path, monkeypatch):
+        """An anchored row whose chaincode record vanished is reported stale,
+        with a re-anchor hint, without a false 'verified'."""
+
+        def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
+            if "querycc" in str(request.url):
+                return httpx.Response(200, json={"error": "no record found"})
+            raise AssertionError(f"unexpected request: {request.url}")
+
+        self._patch_get(monkeypatch, handler)
+        ea, block, pdf = self._seed(tmp_path, monkeypatch)
+        res = ea.verify_anchor(block["call_id"])
+        assert res["stale"] is True
+        assert res["verified"] is False
+        assert any("stale" in p for p in res["problems"])
+
+    def test_dead_gateway_surfaces_unreachable(self, tmp_path, monkeypatch):
+        """A dead gateway fails fast and surfaces 'gateway_unreachable' with a
+        hint instead of raw per-request errors."""
+
+        def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(503)
+            raise AssertionError(f"unexpected request: {request.url}")
+
+        self._patch_get(monkeypatch, handler)
+        ea, block, pdf = self._seed(tmp_path, monkeypatch)
+        res = ea.verify_anchor(block["call_id"])
+        assert res["anchor_status"] == "gateway_unreachable"
+        assert res["verified"] is False
+        assert any("gateway_unreachable" in p or "gateway unreachable" in p for p in res["problems"])
 
 
 class TestNBFLiteParity:
@@ -388,6 +429,8 @@ class TestNBFLiteParity:
         )
 
         def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
             if "querycc" in str(request.url):
                 return httpx.Response(200, json={"result": camel})
             if "retrieve" in str(request.url):
@@ -407,6 +450,8 @@ class TestNBFLiteParity:
         ea, block, pdf = self._seed(tmp_path, monkeypatch)
 
         def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
             if "querycc" in str(request.url):
                 return httpx.Response(200, json={"result": {
                     "call_id": block["call_id"], "block_hash": block["block_hash"],
@@ -441,6 +486,8 @@ class TestNBFLiteParity:
         monkeypatch.setattr("app.config.settings.nbf_ipfs_mode", "base64text")
 
         def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
             if "querycc" in str(request.url):
                 return httpx.Response(200, json={"result": json.dumps({
                     "call_id": block["call_id"], "block_hash": block["block_hash"],
@@ -460,6 +507,8 @@ class TestNBFLiteParity:
         monkeypatch.setattr("app.config.settings.nbf_ipfs_mode", "raw")
 
         def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
             if "querycc" in str(request.url):
                 return httpx.Response(200, json={"result": json.dumps({
                     "call_id": block["call_id"], "block_hash": block["block_hash"],
@@ -478,6 +527,8 @@ class TestNBFLiteParity:
         ea, block, pdf = self._seed(tmp_path, monkeypatch)
 
         def handler(request):
+            if "health" in str(request.url):
+                return httpx.Response(200, json={"status": "ok"})
             if "querycc" in str(request.url):
                 return httpx.Response(200, json={"result": json.dumps({
                     "call_id": block["call_id"], "block_hash": block["block_hash"],

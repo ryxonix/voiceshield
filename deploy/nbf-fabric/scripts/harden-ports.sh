@@ -21,7 +21,7 @@ sudo ufw allow from "$ALLOW_FROM" to any port 22 proto tcp
 sudo ufw allow from "$ALLOW_FROM" to any port "${GATEWAY_PORT}" proto tcp
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-sudo ufw enable
+sudo ufw --force enable
 
 echo "==> Active rules:"
 sudo ufw status verbose

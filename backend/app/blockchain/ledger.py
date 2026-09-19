@@ -13,11 +13,13 @@ A block commits:
 
 Blocks are "mined" with proof-of-work (SHA-256 nonce search at a configurable
 difficulty) so retroactive rewriting is economically infeasible even locally.
+The genesis block (index 0) is the trusted root and is mined with difficulty 0.
 
 Verification:
   - file integrity:  recompute SHA-256 of the PDF on disk vs. the block
   - block identity:  recompute block hash from fields, recheck PoW difficulty
   - chain integrity: every block's prev_hash must equal its predecessor's hash
+                    (PoW is enforced only on non-genesis blocks)
 """
 
 import hashlib
@@ -42,10 +44,6 @@ GENESIS_HASH = "0" * 64
 
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def _leaf(*parts: Any) -> str:
-    return sha256_hex(json.dumps(list(parts), sort_keys=True, separators=(",", ":")).encode("utf-8"))
 
 
 def merkle_root(leaves: List[Any]) -> str:
@@ -161,6 +159,7 @@ def anchor_report(
         file_sha256=file_sha256,
         merkle=merkle,
         prev_hash=prev_hash,
+        difficulty=0 if index == 0 else None,
     )
     block["file_path"] = file_path
     store.insert_block(**block)
@@ -219,14 +218,15 @@ def verify_chain() -> Dict[str, Any]:
     checks: List[Dict[str, Any]] = []
     ok = True
     expected_prev = GENESIS_HASH
-    for i, b in enumerate(blocks):
-        name = f"block#{b['block_index']}"
+    for b in blocks:
         problems = []
         if b["prev_hash"] != expected_prev:
             problems.append("prev_hash mismatch (chain break)")
         if _recompute_block_hash(b) != b["block_hash"]:
             problems.append("block hash does not match fields")
-        if not _check_pow(b):
+        # Genesis (index 0) is the trusted root and is mined with difficulty 0,
+        # so proof-of-work is only enforced on blocks 1+.
+        if b["block_index"] != 0 and not _check_pow(b):
             problems.append("proof-of-work difficulty not met")
         if problems:
             ok = False
@@ -234,9 +234,6 @@ def verify_chain() -> Dict[str, Any]:
         else:
             checks.append({"block_index": b["block_index"], "valid": True, "problems": []})
         expected_prev = b["block_hash"]
-        if name == "block#0" and b["prev_hash"] != GENESIS_HASH:
-            problems_note = checks[-1]["problems"]
-            problems_note.append("genesis must have empty parent")
     return {
         "chain_id": CHAIN_ID,
         "height": len(blocks),

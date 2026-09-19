@@ -1,8 +1,10 @@
 # VoiceShield AI — minimal NBF-compatible anchor network
 #
-# A single-org Hyperledger Fabric 2.2 network (peer + orderer + CA + couchdb,
+# A single-org Hyperledger Fabric 2.2 network (peer + orderer + couchdb,
 # matching the image tags bundled with NBF-Lite nbf_c/docker_images) plus a
-# Kubo IPFS node and the trimmed nbf-samplerest gateway.
+# Kubo IPFS node and the trimmed nbf-samplerest gateway. There is no Fabric CA:
+# all identities come from cryptogen and are mounted as files, so the peer and
+# the gateway wallet never need a registering CA service.
 #
 #   docker compose up -d
 #   bash scripts/install-chaincode.sh      # install + approve + commit
@@ -78,19 +80,6 @@ services:
           - orderer.vsh.example.com
     ports:
       - "7050:7050"
-
-  ca:
-    image: hyperledger/fabric-ca:1.4.9
-    restart: unless-stopped
-    container_name: vsh-ca
-    environment:
-      - FABRIC_CA_HOME=/etc/hyperledger/fabric-ca-server
-      - FABRIC_CA_SERVER_CA_CERTFILE=/etc/hyperledger/fabric-ca-server-config/ca-cert.pem
-      - FABRIC_CA_SERVER_CA_KEYFILE=/etc/hyperledger/fabric-ca-server-config/ca-key.pem
-    volumes:
-      - ./crypto-config/peerOrganizations/vsh.example.com/ca/:/etc/hyperledger/fabric-ca-server-config
-    ports:
-      - "7054:7054"
 
   ipfs:
     image: ipfs/kubo:latest

@@ -455,7 +455,38 @@ const kn: Record<string, string> = {
   live: 'ಲೈವ್',
 }
 
-const dict: Record<Lang, Record<string, string>> = { en: {}, hi, kn }
+/**
+ * English is the source language: natural-language keys fall back to the key
+ * itself, so only the coded keys need explicit labels here (they would
+ * otherwise render as raw identifiers like `role.adult` or `sev.critical`).
+ */
+const en: Record<string, string> = {
+  'v.bonafide': 'Genuine voice',
+  'v.synthetic': 'Synthetic',
+  'v.verified_enterprise': 'Verified enterprise',
+  'v.suspicious': 'Suspicious',
+  'v.synthetic+speaker_mismatch': 'Synthetic + speaker mismatch',
+  'role.adult': 'Adult',
+  'role.child': 'Child',
+  'sev.critical': 'Critical',
+  'sev.high': 'High',
+  'sev.medium': 'Medium',
+  'sev.low': 'Low',
+  'band.low': 'Low',
+  'band.medium': 'Medium',
+  'band.high': 'High',
+  'band.critical': 'Critical',
+  'error.verification failed': 'Verification failed',
+  'error.Analysis failed — is the backend reachable?': 'Analysis failed — is the backend reachable?',
+  'error.undefined': 'Something went wrong.',
+  'Error: {e}': 'Error: {e}',
+  'Failed to load incidents': 'Failed to load incidents',
+  'Failed to acknowledge incident': 'Failed to acknowledge incident',
+  'External anchor (NBF-Fabric)': 'External anchor (NBF-Fabric)',
+  'demo / offline': 'demo / offline',
+}
+
+const dict: Record<Lang, Record<string, string>> = { en, hi, kn }
 
 type T = (key: string, vars?: Record<string, string | number>) => string
 

@@ -74,5 +74,17 @@ app.get('/fabric/v1/querycc', async (req, res) => {
   }
 });
 
+// POST body form (args is an array): mirrors the NBF samplerest contract.
+app.post('/fabric/v1/querycc', async (req, res) => {
+  try {
+    const { fcn, user, ccname, channel, cfgpath, local, mspId, args } = req.body;
+    const argList = Array.isArray(args) ? args : (args ? String(args).split(',') : []);
+    const result = await queryFunction({ fcn, args: argList, user, ccname, channel, cfgpath, local, mspId });
+    res.json({ result });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 const PORT = process.env.GATEWAY_PORT || 4000;
 app.listen(PORT, () => console.log(`VoiceShield NBF gateway on :${PORT}`));

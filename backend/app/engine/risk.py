@@ -1,27 +1,33 @@
 """
 VoiceShield AI — Risk Banding, Verdicts, and Recommendations
 
-Bands mirror the dashboard cards:
-    critical   >= 0.85
-    high       >= 0.68
+Band edges derive from the configured role threshold (settings.adult_threshold
+= 0.85 and settings.child_threshold = 0.70 by default). "critical" is the role
+threshold itself; "high" sits 0.17 below it; "medium" starts at 0.35.
+
+    critical   >= role_threshold              (child 0.70 / adult 0.85)
+    high       >= role_threshold - 0.17
     medium     >= 0.35
     low        <  0.35
 """
 
-ADULT_THRESHOLD = 0.85
-CHILD_THRESHOLD = 0.70
+from app.config import settings
+
+HIGH_EDGE_OFSET = 0.17
+MEDIUM_EDGE = 0.35
 
 
 def threshold_for(role: str = "adult") -> float:
-    return CHILD_THRESHOLD if role == "child" else ADULT_THRESHOLD
+    return settings.child_threshold if role == "child" else settings.adult_threshold
 
 
 def risk_band(score: float, role: str = "adult") -> str:
-    if score >= 0.85:
+    critical = threshold_for(role)
+    if score >= critical:
         return "critical"
-    if score >= 0.68:
+    if score >= critical - HIGH_EDGE_OFSET:
         return "high"
-    if score >= 0.35:
+    if score >= MEDIUM_EDGE:
         return "medium"
     return "low"
 

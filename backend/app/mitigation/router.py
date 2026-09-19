@@ -5,23 +5,10 @@ Routes detection results to appropriate mitigation actions based on role and sco
 
 import asyncio
 import logging
-from dataclasses import dataclass, asdict
-from typing import Dict, Any
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class MitigationAction:
-    """Base mitigation action."""
-    action: str
-    triggered: bool
-    details: Dict[str, Any]
-
-    def to_dict(self) -> dict:
-        return asdict(self)
 
 
 async def evaluate_mitigation(

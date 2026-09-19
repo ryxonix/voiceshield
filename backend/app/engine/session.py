@@ -118,20 +118,6 @@ class SessionManager:
                 state.history.clear()
             logger.info("All sessions destroyed (shutdown)")
 
-    def get_active_sessions(self) -> List[Dict[str, Any]]:
-        """List all active sessions (for dashboard)."""
-        return [
-            {
-                "call_id": s.call_id,
-                "role": s.role,
-                "start_time": s.start_time.isoformat(),
-                "peak_score": s.peak_score,
-                "window_count": s.window_count,
-                "last_action": s.last_action,
-            }
-            for s in self._sessions.values()
-        ]
-
 
 # Singleton instance
 session_manager = SessionManager()

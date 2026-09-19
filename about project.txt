@@ -28,7 +28,10 @@ Detection mix : ensemble of acoustic deep models + explainable prosodic
 
   score = 0.7 x model_prob + 0.3 x xai_risk
 
-The project is a single git repository with one commit ("Initial commit").
+The project lives in a single git repository (private: `ryxonix/voiceshield`,
+branch `main`). History is a sequence of reviewed commits (backend, frontend,
+deploy, docs) rather than one "Initial commit"; changes are committed and
+pushed per logical milestone.
 
 --------------------------------------------------------------------------------
 2. HOW IT WORKS (PIPELINE)
@@ -206,7 +209,9 @@ Privacy: raw audio lives only in RAM and is overwritten every window.
   Speaker voice-print         deterministic one-way embedding   cross-session speaker  in-memory ours (MIT)
                              (engine/speaker.py)           consistency (DPDP-safe)
 
-  Checkpoint / artifact paths on disk:
+  Checkpoint / artifact paths on disk (derived weights, git-ignored under
+  .gitignore; the ONNX fallback is regenerated with:
+    python -m app.models.export_onnx checkpoints/best_model.pth ):
     backend/models/dhwani/best_model.onnx                  (1204 MB)
     backend/models/sih_cloud_xlsr/model.safetensors        (1204 MB)  + config/tokenizer
     backend/models/aasist_l.onnx (+ .data)                 (exported AASIST-L)
@@ -275,6 +280,9 @@ Privacy: raw audio lives only in RAM and is overwritten every window.
   Hugging Face    model/data push + download   HF_TOKEN              https://huggingface.co/settings/tokens
   Blockchain      LOCAL PoW SHA-256 ledger     BLOCKCHAIN_DIFFICULTY  (no key needed)
   NBF Lite anchor Hyperledger-Fabric + IPFS   BLOCKCHAIN_EXTERNAL_ANCHOR etc.  deploy/nbf-fabric/
+                  (opt-in, default OFF -> local DemoAnchor shadow records the
+                  same payload offline with status 'demo'; when True the gateway
+                  is required and failures degrade to 'pending' / retryable)
   DoT escalation  Sanchar Saathi / Chakshu / DIP  CHAKSHU_DIP_WEBHOOK_URL (optional)
                   suspected-fraud metadata routing via webhook - citizen-facing
                   portals (NO public API), so this is OUR documented integration

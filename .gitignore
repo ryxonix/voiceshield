@@ -58,8 +58,18 @@ backend/models/dhwani/
 models/dhwani/
 backend/models/sih_cloud_xlsr/
 *.onnx.metadata
+*.onnx
+*.onnx.data
+backend/models/aasist_l.onnx*
 .cache/
 **/__pycache__/
+
+# Derived model weights & checkpoints (regenerate via python -m app.models.export_onnx)
+backend/checkpoints/
+backend/hf_models/aasist/models/weights/
+
+# Generated forensics / incident reports (PDF)
+backend/reports/*.pdf
 
 # Temporary repositories / clones
 temp_repo/

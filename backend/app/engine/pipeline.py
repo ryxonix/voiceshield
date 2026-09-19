@@ -204,8 +204,3 @@ def analyze_window(
         },
         "latency_ms": round(latency_ms, 2),
     }
-
-
-def hop_step_ms() -> int:
-    """Time advance per emitted window (ms)."""
-    return int(round(settings.hop_samples * 1000.0 / settings.sample_rate))

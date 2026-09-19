@@ -78,7 +78,7 @@ class AASISTInference:
                 if cls._instance is None:
                     if model_path is None:
                         from app.config import settings
-                        model_path = settings.onnx_model_path
+                        model_path = settings.onnx_model_resolved
                         num_threads = settings.onnx_threads
                     cls._instance = cls(model_path, num_threads)
         return cls._instance

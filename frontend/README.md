@@ -1,32 +1,24 @@
-# React + TypeScript + Vite
+# VoiceShield AI — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript + Vite dashboard for the VoiceShield AI voice-integrity
+platform. Talks to the FastAPI backend (`backend/`) over `/api`, `/ws` and
+`/health`, which are proxied to `http://localhost:8000` in dev (see
+`vite.config.ts`).
 
-Currently, two official plugins are available:
+## Run
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev        # http://localhost:5173  (proxies to :8000 backend)
+npm run build      # typecheck + production bundle (dist/)
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Wiring
+
+- `src/api` convention: fetch requests use `apiBase()` (`src/components/ui.tsx`),
+  which returns `http://<host>:8000` during local dev and an empty string when
+  served from the same origin as the backend (e.g. a reverse proxy).
+- WebSocket sessions: `wsBase()` in the same file.
+- UI text goes through `src/i18n.tsx` (`en` is the source language; `hi` and
+  `kn` are full translations). Add any new user-facing string to the three
+  dictionaries.

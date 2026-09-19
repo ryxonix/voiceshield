@@ -17,13 +17,13 @@ anchor is marked `pending` (retryable via
 a truthful `demo` status.
 
 ```
-┌──────────────┐  POST /store (cipher b64)   ┌──────────────┐   IPFS (Kubo)
-│  backend     │ ──────────────────────────▶ │  gateway :4000 │ ───────────▶ encrypted PDF
-│  (FastAPI)   │  POST /fabric/v1/invokecc   │  (express)      │  ┌──────┐
-└──────────────┘ ──────────────────────────▶ │   └─┬─────────┘  │ Hyperledger
-       │                                      │    ▼            │ Fabric
-       └─ GET /api/blockchain/onchain/{call}  │ fabric_client   └► ReportAnchor ✔
-                                             └──────────────┘
+┌──────────────┐  POST /store (cipher b64)      ┌──────────────┐   IPFS (Kubo)
+│  backend     │ ─────────────────────────────▶ │  gateway :4000 │ ─────────▶ encrypted PDF
+│  (FastAPI)   │  POST /fabric/v1/invokecc      │  (express)      │  ┌──────┐
+└──────────────┘ ─────────────────────────────▶ │   └─┬─────────┘  │ Hyperledger
+       │                                        │    ▼            │ Fabric
+       └─ GET /api/blockchain/onchain/{call_id} │ fabric_client   └──► AnchorReport
+                                                └──────────────┘
 ```
 
 ## 1. Gateway endpoints
@@ -35,6 +35,7 @@ a truthful `demo` status.
 | `GET`  | `/retrieve/:cid`        | –                                             | `{ data (base64) }` |
 | `POST` | `/fabric/v1/invokecc`   | `{ fcn, args, user, ccname, channel, cfgpath, local, mspId, txId }` | `{ tx_id, status }` |
 | `GET`  | `/fabric/v1/querycc`    | `fcn=QueryReport&args=<call_id>&user=...`     | `{ result }` |
+| `POST` | `/fabric/v1/querycc`    | `{ fcn, args: [...] , user, ... }`            | `{ result }` |
 
 ## 2. Quick start (WSL2 Ubuntu + Docker)
 
@@ -43,7 +44,7 @@ Prereqs: Docker Desktop (WSL 2 backend), `docker compose`, Node ≥ 16.
 ```bash
 # terminal 1 — Fabric test network (crypto, channel, chaincode)
 cd deploy/nbf-fabric
-./scripts/gen-crypto.sh                     # fabric-ca enroll + MSPs
+./scripts/gen-crypto.sh                     # cryptogen MSPs (no Fabric CA)
 ./scripts/gen-connection-profile.sh         # connection-org1.json
 docker compose -f docker-compose.yml up --build -d
 ./scripts/install-chaincode.sh              # deploy voiceshield-report chaincode

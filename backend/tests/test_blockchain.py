@@ -31,6 +31,7 @@ def _fast_mining(monkeypatch):
     monkeypatch.setattr(settings, "blockchain_difficulty", DIFFICULTY_TEST)
     from app import store
     store._execute("DELETE FROM blocks")
+    store._execute("DELETE FROM block_anchors")
 
 
 class TestMerkleRoot:
@@ -145,6 +146,28 @@ class TestChainIntegrity:
         assert chain["blocks"][0]["valid"] is True
         assert chain["blocks"][1]["valid"] is True
 
+    def test_genesis_poW_exempt_but_children_required(self):
+        """Genesis is the trusted root (mined at difficulty 0), so it must not
+        count as a proof-of-work failure, while later blocks still must."""
+        from app.blockchain import ledger
+        from app import store
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf = os.path.join(tmp, "genesis.pdf")
+            _fake_pdf(pdf, b"genesis content")
+            ledger.anchor_report(
+                call_id="genesis-0", report_id="r-g0",
+                incident_id=None, file_path=pdf, window_leaves=[],
+            )
+            # Genesis must have been mined with difficulty 0.
+            genesis = store.get_block(0)
+            assert not genesis["block_hash"].startswith("0" * DIFFICULTY_TEST)
+
+        chain = ledger.verify_chain()
+        assert chain["valid"] is True
+        genesis_check = chain["blocks"][0]
+        assert genesis_check["valid"] is True
+        assert not any("proof-of-work" in p for p in genesis_check["problems"])
+
 
 # ── API tests ──────────────────────────────────────────────────────────────
 
@@ -185,3 +208,16 @@ class TestBlockchainAPI:
             r2 = self.client.get("/api/blockchain/verify/block/0")
             assert r2.status_code == 200
             assert r2.json()["valid"] is True
+
+    def test_onchain_routes_not_shadowed_by_index(self):
+        """Literal 'onchain' paths must beat the /api/blockchain/{index} int route."""
+        summary = self.client.get("/api/blockchain/onchain")
+        assert summary.status_code == 200, summary.text
+        body = summary.json()
+        assert "verifiable" in body and "pending_demo" in body
+
+        per_call = self.client.get("/api/blockchain/onchain/api-001")
+        assert per_call.status_code == 200, per_call.text
+
+        index_route = self.client.get("/api/blockchain/0")
+        assert index_route.status_code in (200, 404)  # still resolves as int index

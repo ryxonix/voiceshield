@@ -38,7 +38,7 @@ VCN → **Virtual Cloud Networks** → your VCN → **Security Lists** → defau
 | Ingress   | TCP      | 4000 | gateway (skip if you use the SSH tunnel mode, §6b) |
 
 Everything else stays **closed**. The stack's internal ports
-(5001/8080 Kubo IPFS, 5984 CouchDB, 7050 orderer, 7051 peer, 7054 CA) must
+(5001/8080 Kubo IPFS, 5984 CouchDB, 7050 orderer, 7051 peer) must
 never be exposed — the Kubo API on :5001 is unauthenticated.
 
 ## 3. SSH in + install Docker
@@ -68,8 +68,7 @@ git clone <your-repo-url> voiceshield
 cd voiceshield/deploy/nbf-fabric
 ```
 
-(If you need a remote, push the single existing commit:
-`git -C F:\voiceshield remote add origin <url> && git push -u origin main`.)
+(Add a remote if you have one: `git -C F:\voiceshield remote add origin <url> && git push -u origin main` — the repo has real commit history, not a single initial commit.)
 
 ## 5. Deploy the whole stack (self-contained)
 
@@ -83,9 +82,10 @@ The script (see `scripts/deploy-cloud.sh`) does everything:
 - `gen-crypto.sh` — Org1 + Orderer crypto + channel config,
 - `gen-connection-profile.sh` + `build-wallet.sh` — gateway connection profile
   and the `User1` wallet identity,
-- `docker compose up -d --build` — peer, orderer, CA, CouchDB, **Kubo IPFS and
-  the gateway** in one network (no separate IPFS daemon needed on the VM;
-  the compose sets `AS_LOCALHOST=false` for docker-internal discovery),
+- `docker compose up -d --build` — peer, orderer, CouchDB, **Kubo IPFS and
+  the gateway** in one network (cryptogen identities, no Fabric CA; no separate
+  IPFS daemon needed on the VM; the compose sets `AS_LOCALHOST=false` for
+  docker-internal discovery),
 - channel `mychannel` creation + join,
 - `install-chaincode.sh` — package/install/approve/commit `voiceshield-report`.
 
@@ -135,7 +135,7 @@ ssh -i ~/.ssh/id_ed25519 -N -L 4000:localhost:4000 opc@<PUBLIC_IP>
 
 ## 7. Verify end-to-end
 
-1. Restart the backend (`cd F:\voiceshield\backend && venv\Scripts\python.exe app\main.py`).
+1. Restart the backend (`cd F:\voiceshield\backend && venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000`).
 2. Generate any forensic report (POST an audio sample).
 3. Verify the anchor:
    ```bash

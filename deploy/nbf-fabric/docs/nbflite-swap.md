@@ -73,8 +73,11 @@ Zero backend change; identity comes from their wallet + connection profile.
 ```bash
 cd deploy/nbf-fabric/gateway
 npm install                                   # free, local
-cp ../scripts_lite_nbf/connection-org1.json . # NBFLite's generated profile
-bash ../scripts/build-wallet.sh               # enroll User1 into ./wallet
+cp /path/to/nbflite/generated/connection-org1.json .
+                                              # NBFLite's generated connection profile
+# Wallet identity: enroll the same org user NBFLite created (their CA). The
+# bundled scripts/build-wallet.sh only works with OUR cryptogen layout, so for
+# an NBFLite network use their enroll/registerUser wallet instead.
 CCP_FILE=./connection-org1.json WALLET_DIR=./wallet \
   AS_LOCALHOST=true node server.js            # :4000
 ```

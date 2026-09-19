@@ -13,7 +13,7 @@ Flow (per report):
        Only {ipfs_cid, enc_alg, key_fp, file_sha256} are ever committed to
        the ledger; the raw key never leaves the operator's machine.
     2. Push ciphertext (base64) to the IPFS store endpoint  ->  CID.
-    3. Invoke chaincode `voiceshield-report anchorReport(...)` on Fabric,
+    3. Invoke chaincode `voiceshield-report AnchorReport(...)` on Fabric,
        recording call/report/incident ids, block hash, merkle root,
        timestamp, ipfs_cid, enc_alg, key_fp.
 
@@ -248,7 +248,7 @@ class I4CAnchor(AnchorProvider):
         tx_id = "tx-" + secrets.token_hex(12)
 
         txid = self._fabric_invoke(
-            "anchorReport",
+            "AnchorReport",
             [
                 str(call_id),
                 str(report_id),
@@ -405,11 +405,13 @@ def _normalize_anchor(record: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def query_onchain(call_id: str) -> Dict[str, Any]:
+def query_onchain(call_id: str, missing_ok: bool = False) -> Optional[Dict[str, Any]]:
     """Query the Fabric chaincode (`QueryReport`) for a call's anchor record.
 
-    Returns the parsed, key-normalized ReportAnchor as a dict. Fail-fast: any
-    gateway/chaincode error raises so callers can degrade gracefully (fail-open).
+    Returns the parsed, key-normalized ReportAnchor as a dict, or ``None`` when
+    the chaincode reports no record and ``missing_ok`` is set (used for
+    stale-anchor detection). Fail-fast otherwise: any gateway/chaincode error
+    raises so callers can degrade gracefully (fail-open).
     """
     gw = _gateway_base()
     if not gw:
@@ -427,9 +429,13 @@ def query_onchain(call_id: str) -> Dict[str, Any]:
     r.raise_for_status()
     body = r.json()
     if isinstance(body, dict) and body.get("error"):
+        if missing_ok and str(body["error"]).lower() in ("no record found", "record not found", "empty"):
+            return None
         raise RuntimeError(str(body["error"]))
     result = body.get("result")
     if result is None:
+        if missing_ok:
+            return None
         raise RuntimeError(f"Chaincode query returned no result: {body}")
     if isinstance(result, str):
         try:
@@ -439,6 +445,18 @@ def query_onchain(call_id: str) -> Dict[str, Any]:
     if not isinstance(result, dict):
         return {"raw": result}
     return _normalize_anchor(result)
+
+
+def _gateway_health(timeout: float = 10.0) -> bool:
+    """Fast health probe for the NBF-Lite gateway (fails quickly when dead)."""
+    gw = _gateway_base()
+    if not gw:
+        return False
+    try:
+        r = httpx.get(f"{gw}/health", timeout=timeout)
+        return 200 <= r.status_code < 300
+    except Exception:
+        return False
 
 
 def _decode_cipher_payload(data: str, key: bytes, mode: str = "auto") -> bytes:
@@ -533,18 +551,37 @@ def verify_anchor(
             problems.append(f"external anchor {anchor_status} — nothing on-chain to verify")
         return result
 
+    # Pre-flight: fast health probe on the gateway so a dead / unwired forward
+    # fails quickly and cleanly with an actionable hint instead of raw 500s.
+    if not _gateway_health(timeout=10.0):
+        result["anchor_status"] = "gateway_unreachable"
+        problems.append(
+            "NBF-Lite gateway unreachable — set NBF_GATEWAY_URL to a live "
+            "gateway (restart Codespace or deploy scripts/local-wsl2.sh) and "
+            "call POST /api/blockchain/retry/{call_id} to re-anchor"
+        )
+        result["problems"] = problems
+        return result
+
     # 1) On-chain record vs local block
     try:
-        onchain = query_onchain(call_id)
-        result["onchain"] = onchain
-        for field, expect in (
-            ("call_id", call_id),
-            ("block_hash", local_block["block_hash"]),
-            ("file_sha256", local_block["file_sha256"]),
-            ("merkle_root", local_block["merkle_root"]),
-        ):
-            if str(onchain.get(field, "")) != str(expect):
-                problems.append(f"on-chain {field} differs from local block")
+        onchain = query_onchain(call_id, missing_ok=True)
+        if onchain is None:
+            result["stale"] = True
+            problems.append(
+                f"on-chain record missing for '{call_id}' — anchor is stale; "
+                "re-anchor via POST /api/blockchain/retry/{call_id}"
+            )
+        else:
+            result["onchain"] = onchain
+            for field, expect in (
+                ("call_id", call_id),
+                ("block_hash", local_block["block_hash"]),
+                ("file_sha256", local_block["file_sha256"]),
+                ("merkle_root", local_block["merkle_root"]),
+            ):
+                if str(onchain.get(field, "")) != str(expect):
+                    problems.append(f"on-chain {field} differs from local block")
     except Exception as e:  # fail-open
         problems.append(f"on-chain query failed (fail-open): {type(e).__name__}: {e}")
 

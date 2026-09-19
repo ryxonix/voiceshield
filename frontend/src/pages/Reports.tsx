@@ -59,7 +59,10 @@ function Sessions() {
 
   useEffect(() => {
     fetch(`${apiBase()}/api/sessions`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+        return r.json()
+      })
       .then((xs) => setSessions(Array.isArray(xs) ? xs : []))
       .catch(() => setSessions([]))
   }, [])
@@ -67,7 +70,10 @@ function Sessions() {
   useEffect(() => {
     if (!selected) return setWindows([])
     fetch(`${apiBase()}/api/sessions/${selected}/windows`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+        return r.json()
+      })
       .then((xs) => setWindows(Array.isArray(xs) ? xs : []))
       .catch(() => setWindows([]))
   }, [selected])
@@ -161,7 +167,10 @@ function BlockchainLedger() {
 
   const load = () => {
     fetch(`${apiBase()}/api/blockchain`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
+        return r.json()
+      })
       .then(setStatus)
       .catch(() => setStatus(null))
   }
@@ -172,6 +181,7 @@ function BlockchainLedger() {
     setChecking((c) => ({ ...c, [key]: true }))
     try {
       const r = await fetch(`${apiBase()}/api/blockchain/verify/call/${block.call_id}`)
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
       const j = await r.json()
       setResults((prev) => ({ ...prev, [key]: j }))
     } catch {
@@ -356,6 +366,11 @@ function FileAnalyzer() {
       const fd = new FormData()
       fd.append('file', file)
       const r = await fetch(`${apiBase()}/api/analyze?role=${role}`, { method: 'POST', body: fd })
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        setResult({ error: j?.error || 'Analysis failed — is the backend reachable?' })
+        return
+      }
       setResult(await r.json())
     } catch {
       setResult({ error: 'Analysis failed — is the backend reachable?' })

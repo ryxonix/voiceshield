@@ -53,7 +53,7 @@ Incident log  ─▶  I4C-ready forensic PDF
 | Detection | Dhwani (multilingual Indian deepfake model) + AASIST-L official ensemble, INT8 ONNX inference on CPU |
 | Explainability | Jitter %, Shimmer %, Phase Continuity, Pitch Stability, noise-floor dropouts |
 | Real-time | Live call analysis over WebSocket, 3 s windows / 1 s hop (300 ms/100 ms fallback) |
-| Risk | Role-aware thresholds — Adult ≥ 0.85 critical, Child ≥ 0.70 critical |
+| Risk | Role-aware thresholds — Adult ≥ 0.85 critical, Child ≥ 0.70 critical (`ADULT_THRESHOLD` / `CHILD_THRESHOLD` in `.env`) |
 | Alerting | Telegram, Gmail SMTP, ntfy.sh, Fast2SMS, webhook — all optional |
 | Escalation | **Suspected** fraud → optional DoT conduct hand-off (Sanchar Saathi / Chakshu / DIP) via `CHAKSHU_DIP_WEBHOOK_URL`; **confirmed** fraud → I4C/1930 flow in the forensic PDF |
 | Child Shield | Lower threshold, auto-mute, protective overlay |
@@ -111,7 +111,7 @@ The `.env` has clearly-marked sections. Here is exactly what goes where:
 **Blockchain API keys** → the same file, section `⛓ BLOCKCHAIN REPORT LEDGER`:
 - The report ledger is **local and needs NO external key** (`BLOCKCHAIN_DIFFICULTY` is just the PoW difficulty, default 4).
 - `BLOCKCHAIN_RPC_URL`, `BLOCKCHAIN_EXPLORER_API_KEY`, `BLOCKCHAIN_ANCHOR_ADDRESS` are **optional** anchors if you later pin block hashes to a public chain.
-- **NBF-Lite external anchor** (default ON, demo mode): `BLOCKCHAIN_EXTERNAL_ANCHOR=false` runs a local `DemoAnchor` shadow so verification works offline. Set `BLOCKCHAIN_EXTERNAL_ANCHOR=true` + `NBF_GATEWAY_URL=http://<host>:4000` to push real Fabric/IPFS anchors through the gateway in [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — see the [NBF anchor section](#-nbf-anchor-network-meity-vishvasya) below.
+- **NBF-Lite external anchor** (opt-in, default OFF): `BLOCKCHAIN_EXTERNAL_ANCHOR=false` (default) uses a local `DemoAnchor` shadow so integrity verification works offline (status `demo`, never `anchored`). Set `BLOCKCHAIN_EXTERNAL_ANCHOR=true` + `NBF_GATEWAY_URL=http://<host>:4000` to push real Hyperledger Fabric + IPFS anchors through the gateway in [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — see the [NBF anchor section](#-nbf-anchor-network-meity-vishvasya). If the gateway is unreachable anchors are marked `pending` and stay retryable via `POST /api/blockchain/retry/{call_id}` (fail-open).
 - Exactly one variable per line, restart the backend after editing.
 
 ### 3. Start the backend
@@ -154,6 +154,8 @@ Double-click **`start_all.bat`** (backend :8000 + frontend :5173).
 | GET | `/api/blockchain/{index}` | Single block |
 | GET | `/api/blockchain/verify/call/{call_id}` | Full tamper-evidence check |
 | GET | `/api/blockchain/verify/block/{index}` | PoW + hash integrity check |
+| GET | `/api/blockchain/onchain` | NBF anchor summary (count + per-block link) |
+| GET | `/api/blockchain/onchain/{call_id}` | External anchor status/verification for one call |
 | POST | `/api/blockchain/retry/{call_id}` | Re-attempt a `pending` NBF-Fabric/IPFS anchor |
 | POST | `/api/speakers/register` | Enroll a speaker voice-print |
 | GET | `/health`, `/info` | Health / model status |
@@ -181,7 +183,7 @@ voiceshield/
 │   │   └── store.py             # In-memory / Neon persistence
 │   ├── training/                # augmentations, dataset, train, evaluate,
 │   │   │                        #   fetch_indic (FLEURS + TTS spoof), merge_protocols
-│   ├── models/                  # ONNX models (aasist_l, dhwani weights)
+│   ├── models/                  # ONNX + .onnx.data (aasist_l, dhwani — git-ignored, regenerate via export_onnx)
 │   ├── hf_models/aasist/        # official AASIST-L pretrained repo (MIT)
 │   ├── data/                    # training + evaluation audio (git-ignored)
 │   ├── checkpoints/             # trained weights + training_log.txt
@@ -243,6 +245,8 @@ python -m app.models.export_onnx checkpoints/best_model.pth
 ```
 
 > ⚠️ The retrained local AASIST-L is the **fallback** detector. The primary production path uses the **Dhwani** and **official AASIST-L** pretrained models (loaded automatically when present).
+>
+> 📦 Trained weights (`checkpoints/*.pth`, `models/aasist_l.onnx`) are git-ignored artifacts. On a fresh clone, regenerate the ONNX fallback with `python -m app.models.export_onnx checkpoints/best_model.pth`; until then inference returns a neutral 0.5.
 
 ---
 
@@ -286,14 +290,14 @@ Every locally-mined report block is **also** committed to a permissioned **Hyper
 ```
 Forensic PDF ──▶ AES-256-GCM ──▶ IPFS /store ──▶ CID
                                       │
-Local PoW block ──▶ NBF gateway ──▶ Fabric chaincode anchorReport
+Local PoW block ──▶ NBF gateway ──▶ Fabric chaincode AnchorReport
                   (block_hash, merkle_root, file_sha256,
                    ipfs_cid, enc_alg, key_fp)
 ```
 
 - **Private by design**: only hashes / CID / key fingerprint go on the ledger; the raw PDF stays encrypted under an operator-held master key (`reports/keys/org_master.key`). Ciphertext is pinned to IPFS so the full record is recoverable and tamper-evident without exposing voice content.
 - **Fail-open**: if the Fabric network is offline the local PoW chain remains authoritative and the anchor row is marked `pending` (retryable via `POST /api/blockchain/retry/{call_id}`). The `DemoAnchor` provider records the same payload locally so offline demos are truthful (`demo`, never `anchored`).
-- **Deploy** (free tier): see [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — `docker compose up -d` on Oracle Cloud **ARM A1 free tier** (IPFS + Fabric 2.2 peer/orderer/CA + trimmed `nbf-samplerest` gateway + `voiceshield-report.go` chaincode) or **WSL2 Ubuntu** on a laptop. Zero cloud spend either way.
+- **Deploy** (free tier): see [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — `docker compose up -d` on Oracle Cloud **ARM A1 free tier** (IPFS + Fabric 2.2 peer/orderer (cryptogen identities, no CA) + trimmed `nbf-samplerest` gateway + `voiceshield-report.go` chaincode) or **WSL2 Ubuntu** on a laptop. Zero cloud spend either way.
 - **Ministry alignment**: MeitY's National Blockchain Framework (Vishvasya, CDAC/MeitY) is the same substrate NBF-Lite kits teach; anchors at NIC DCs (Bhubaneswar/Pune/Hyderabad) have already authenticated 34 Cr+ documents, and the same framework is being used for telecom blockchain (SMS/Spam enforcement across 1.13 L entities with RBI/SEBI/NIC/C-DAC).
 
 ---

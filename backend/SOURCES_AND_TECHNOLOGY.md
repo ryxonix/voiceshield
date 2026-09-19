@@ -168,7 +168,36 @@ Mic / call audio  ──►  WebSocket  ──►  Ring buffer (RAM)  ──► 
 
 ---
 
-## 8. Reproducing / verifying this document
+## 8. DPDP Act 2023 — data-protection posture
+
+Mapping of Digital Personal Data Protection Act (§) obligations to the design:
+
+| DPDP principle | How VoiceShield complies |
+|---|---|
+| **Lawful purpose** (§4: notice + purpose) | Processing is confined to fraud-detection notice shown in the UI; no secondary use of audio |
+| **Data minimization** (§4, §8) | Only scalar model scores (synthetic_score, jitter, shimmer, phase, verdict) are kept; raw audio lives in RAM and is overwritten every window, never persisted by the live path |
+| **Purpose limitation** | Audio is processed for the single purpose of voice-integrity verdicts; embeddings are one-way (engine/speaker.py) making speech unreconstructable |
+| **Storage limitation** (§8) | Logs/telemetry store non-PII scalars only; forensic PDFs are encrypted (AES-256-GCM) under org-custody keys; ledger stores hashes + CID + key fingerprint, never content |
+| **Security safeguards** (§8) | HTTPS for API/WS in deployment, app-password SMTP, encrypted reports, IPFS ciphertext pinning, PoW tamper-evidence |
+| **Data-principal rights** (§11–§13) | Delegated to the operator via `backend/app/compliance/dpdp.py` helpers; Child Shield requires explicit guardian consent in the UI copy |
+| **Breach notification** (§8(6)) | `backend/app/compliance/dpdp.py` exposes notification helpers for reported incidents (alert + audit trail) |
+
+## 9. Zero-cost / resource posture
+
+- All alert channels (Telegram, Gmail app-password SMTP, ntfy.sh, Fast2SMS,
+  webhook) are free or free-tier; every channel is optional (missing keys are
+  skipped at runtime).
+- Optional persistence uses Neon's free serverless postgres (blank
+  `DATABASE_URL` = in-memory store, fully functional).
+- The NBF anchor network runs entirely on free resources: Oracle Cloud
+  **Always Free** Ampere ARM VM (4 OCPU/24 GB cap) or WSL2 Ubuntu on a laptop —
+  `deploy/nbf-fabric/`. No paid domains, load balancers, or API keys.
+- Training runs on free GPUs (Google Colab free T4 / Kaggle GPU) with
+  open-license data only.
+
+---
+
+## 10. Reproducing / verifying this document
 
 ```bash
 # check .env keys exist (backend/.env.example documents every one)
