@@ -80,6 +80,19 @@ Orderer: &OrdererDefaults
     MaxMessageCount: 10
     AbsoluteMaxBytes: 99 MB
     PreferredMaxBytes: 512 KB
+  Policies:
+    Readers:
+      Type: ImplicitMeta
+      Rule: "ANY Readers"
+    Writers:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
+    Admins:
+      Type: ImplicitMeta
+      Rule: "MAJORITY Admins"
+    BlockValidation:
+      Type: ImplicitMeta
+      Rule: "ANY Writers"
   Organizations:
   Capabilities:
     <<: *OrdererCapabilities
