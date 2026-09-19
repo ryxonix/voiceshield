@@ -13,6 +13,10 @@ ART_DIR=${ART_DIR:-/chaincode/channel-artifacts}
 ADMIN_MSP=/etc/hyperledger/crypto/peerOrganizations/vsh.example.com/users/Admin@vsh.example.com/msp
 
 echo "==> Packaging chaincode"
+# The golang packager normalizes the module root by invoking `go`, which is
+# not shipped in the fabric-peer image. Install it once if missing.
+docker exec -u root vsh-peer0 bash -lc \
+  'command -v go >/dev/null 2>&1 || { apt-get update -qq >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq golang-go >/dev/null; }'
 docker exec vsh-peer0 peer lifecycle chaincode package \
   ${ART_DIR}/${CC_NAME}.tgz \
   --path ${CC_PATH} \
