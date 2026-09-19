@@ -52,32 +52,45 @@ else
 fi
 echo "    package id = ${PKG_ID}"
 
-echo "==> Approve for Org1"
-docker exec \
+COMMITTED_SEQ=$(docker exec \
   -e CORE_PEER_LOCALMSPID=Org1MSP \
   -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
   -e CORE_PEER_ADDRESS=peer0:7051 \
   -e CORE_PEER_TLS_ENABLED=false \
-  vsh-peer0 peer lifecycle chaincode approveformyorg \
-  --orderer ${ORDERER} \
-  --channelID ${CHANNEL} \
-  --name ${CC_NAME} \
-  --version ${CC_VERSION} \
-  --package-id "${PKG_ID}" \
-  --sequence ${CC_SEQUENCE}
+  vsh-peer0 peer lifecycle chaincode querycommitted \
+  --channelID ${CHANNEL} --name ${CC_NAME} 2>/dev/null \
+  | grep -o "Sequence: [0-9]*" | head -1 | awk '{print $2}' || true)
 
-echo "==> Commit on channel"
-docker exec \
-  -e CORE_PEER_LOCALMSPID=Org1MSP \
-  -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
-  -e CORE_PEER_ADDRESS=peer0:7051 \
-  -e CORE_PEER_TLS_ENABLED=false \
-  vsh-peer0 peer lifecycle chaincode commit \
-  --orderer ${ORDERER} \
-  --channelID ${CHANNEL} \
-  --name ${CC_NAME} \
-  --version ${CC_VERSION} \
-  --sequence ${CC_SEQUENCE}
+if [ -n "${COMMITTED_SEQ}" ] && [ "${COMMITTED_SEQ}" -ge "${CC_SEQUENCE}" ]; then
+  echo "    already committed at sequence ${COMMITTED_SEQ}; skipping approve+commit"
+else
+  echo "==> Approve for Org1"
+  docker exec \
+    -e CORE_PEER_LOCALMSPID=Org1MSP \
+    -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
+    -e CORE_PEER_ADDRESS=peer0:7051 \
+    -e CORE_PEER_TLS_ENABLED=false \
+    vsh-peer0 peer lifecycle chaincode approveformyorg \
+    --orderer ${ORDERER} \
+    --channelID ${CHANNEL} \
+    --name ${CC_NAME} \
+    --version ${CC_VERSION} \
+    --package-id "${PKG_ID}" \
+    --sequence ${CC_SEQUENCE}
+
+  echo "==> Commit on channel"
+  docker exec \
+    -e CORE_PEER_LOCALMSPID=Org1MSP \
+    -e CORE_PEER_MSPCONFIGPATH=${ADMIN_MSP} \
+    -e CORE_PEER_ADDRESS=peer0:7051 \
+    -e CORE_PEER_TLS_ENABLED=false \
+    vsh-peer0 peer lifecycle chaincode commit \
+    --orderer ${ORDERER} \
+    --channelID ${CHANNEL} \
+    --name ${CC_NAME} \
+    --version ${CC_VERSION} \
+    --sequence ${CC_SEQUENCE}
+fi
 
 sleep 3
 echo "==> Smoke test: init + query"
