@@ -1,12 +1,6 @@
 {
   "name": "voiceshield-nbf",
   "image": "mcr.microsoft.com/devcontainers/universal:2-linux",
-  "features": {
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:2": {
-      "moby": true,
-      "version": "latest"
-    }
-  },
   "forwardPorts": [4000, 8000],
   "portsAttributes": {
     "4000": {
