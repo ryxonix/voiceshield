@@ -5,6 +5,14 @@ set -euo pipefail
 
 echo "==> Cryptogen: Org1 + Orderer identities"
 mkdir -p crypto-config channel-artifacts gateway/wallet
+
+if [ ! -w crypto-config ]; then
+  echo "crypto-config/ exists but is not writable (root-owned from a previous" >&2
+  echo "run without --user). Remove the stale, root-owned output first:" >&2
+  echo "  sudo rm -rf crypto-config channel-artifacts" >&2
+  exit 1
+fi
+
 docker run --rm --user "$(id -u):$(id -g)" \
   -v ${PWD}:/work -w /work \
   hyperledger/fabric-tools:2.2 \
