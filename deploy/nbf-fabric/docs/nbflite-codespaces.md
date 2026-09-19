@@ -57,7 +57,12 @@ gateway wallet + connection profile + ledger all work end to end.
 **Verified end-to-end 2026-09-19** on a 2-core Codespace (Docker 28 + Compose
 v2): full deploy, chaincode `QueryAll` → genesis record, `/store` pinned a real
 IPFS CID, and a Windows-side backend report anchored + decrypted + SHA-matched
-through the public gateway URL.
+through the public gateway URL (`onchain/{call_id}` returned `verified: true`).
+
+> Re-running after a rework? The deploy scripts had two real bugs that were
+> fixed in history: `gen-crypto.sh` aborted via SIGPIPE under `pipefail`
+> (`d000d60`), and `deploy-cloud.sh` waited on the removed `peer node status`
+> command (`bc6534e`). Pull latest before deploying.
 
 ## 4. Make the gateway public
 
@@ -112,6 +117,10 @@ backend is up.
 | `chaincode already successfully installed` / `new definition must be sequence 2` | Re-running after a successful run | Expected — script is idempotent and skips already-installed/committed definitions |
 | `chaincode registration failed: container exited with 0` | Peer launched chaincode with Fabric's default `NetworkMode: host`, shim couldn't reach `peer0:7052` | `docker-compose.yml` pins `vshnet` + `restart: unless-stopped`; pull + `docker compose up -d` |
 | `Error response from daemon: container ... is not running` | Transient peer crash (Codespace under memory pressure) | `docker compose up -d` (restart policy) then re-run the script |
+| `docker exec vsh-peer0 peer channel create` fails `stat /etc/hyperledger/crypto/.../msp: no such file or directory` | A previous run `rm -rf`'d+recreated `crypto-config/` while containers were still up, so the bind mount still points at the deleted (now empty) inode | `docker compose up -d --force-recreate` to re-bind the fresh directory, then re-run the deploy step |
+| `bash: scripts/install-chaincode.sh: No such file or directory` | Codespace login shells (`~`) reset cwd to `/home/codespace` | Call scripts by absolute path: `bash $PWD/scripts/install-chaincode.sh` (or `cd` again in the same shell) |
+| `peer node status` prints the usage text / deploy step 4 hangs | `peer node status` was removed in Fabric 2.x, so `deploy-cloud.sh`'s old `until ... peer node status ... grep SERVER` looped forever | Pull latest deploy scripts (`d000d60`/`bc6534e`) — the wait now polls `peer channel list` with the Org1 admin identity |
+| `gen-crypto.sh` dies right after the `ls -R crypto-config` listing, no `OK` | `ls -R ... | head` under `set -euo pipefail` aborts on SIGPIPE when `head` closes early | Pull latest (`d000d60`) — the listing is now guarded with `|| true` |
 | Chaincode slow / `container start timeout` | Cold Fabric chaincode container (first ccenv pull + Go build) | Retry after ~30 s; then it's instant |
 | Disk blow-up on old chaincode containers | Repeat deploys | `docker system prune -af` in the Codespace |
 | Codespace stopped → anchors `pending` | Gateway unreachable | Restart Codespace; `POST /api/blockchain/retry/{call_id}` re-anchors |
