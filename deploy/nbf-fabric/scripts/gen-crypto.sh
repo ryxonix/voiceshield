@@ -35,5 +35,5 @@ docker run --rm --user "$(id -u):$(id -g)" \
   -outputCreateChannelTx ./channel-artifacts/channel.tx -channelID mychannel
 
 echo "==> Crypto + config generated under crypto-config/ and channel-artifacts/"
-ls -R crypto-config | head -30
+ls -R crypto-config 2>/dev/null | head -n 30 || true
 echo "OK"
