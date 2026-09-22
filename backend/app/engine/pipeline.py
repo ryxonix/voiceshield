@@ -15,7 +15,7 @@ from app.config import settings
 from app.engine.features import extract_prosodics, noise_floor_dropouts_count
 from app.engine.watermark import check_watermark
 from app.engine.fusion import compute_risk
-from app.engine.risk import risk_band, verdict_for, recommendation
+from app.engine.risk import risk_band, verdict_for, recommendation, label_for
 from app.models.inference import AASISTInference
 
 
@@ -190,6 +190,7 @@ def analyze_window(
         "model_prob": round(model_prob, 4),
         "xai_risk": round(fusion.xai_risk, 4),
         "verdict": verdict,
+        "label": label_for(band, role),
         "risk_band": band,
         "recommendation": recommendation(band, role),
         "speaker_mismatch": mismatched,

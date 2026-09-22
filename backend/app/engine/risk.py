@@ -41,6 +41,11 @@ def verdict_for(band: str, role: str = "adult") -> str:
     return "benign"
 
 
+def label_for(band: str, role: str = "adult") -> str:
+    del role
+    return "spoof" if band in ("critical", "high", "medium") else "bonafide"
+
+
 def recommendation(band: str, role: str = "adult") -> str:
     if band == "critical":
         if role == "child":

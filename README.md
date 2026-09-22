@@ -178,6 +178,7 @@ voiceshield/
 │   ├── app/
 │   │   ├── main.py              # FastAPI entry point (all REST endpoints)
 │   │   ├── config.py            # Pydantic settings ↔ backend/.env
+│   │   ├── grpc/                # gRPC servicer, proto pb2, server (port 50051)
 │   │   ├── models/              # AASIST-L architecture + ONNX inference + export
 │   │   ├── engine/              # dhwani, aasist_official, prosody, fusion,
 │   │   │                        #   ring_buffer, watermark, speaker, risk,
@@ -192,6 +193,7 @@ voiceshield/
 │   │   ├── compliance/          # DPDP Act posture helpers
 │   │   └── store.py             # In-memory / Neon persistence
 │   ├── sdk/                     # voiceshield_sdk (sync/async) + voiceshield.proto
+│   │   │                        #   + grpc.py client (SDK ↔ app/grpc servicer)
 │   ├── workflows.json           # editable mitigation workflow rules (bank/enterprise/gov)
 │   ├── training/                # augmentations, dataset, train, evaluate,
 │   │   │                        #   fetch_indic (FLEURS + TTS spoof), merge_protocols

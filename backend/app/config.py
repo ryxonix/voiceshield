@@ -113,6 +113,8 @@ class Settings(BaseSettings):
     # ── Server ─────────────────────────────────────────────────────────
     host: str = "0.0.0.0"
     port: int = 8000
+    grpc_host: str = "0.0.0.0"
+    grpc_port: int = 50051
     cors_origins: List[str] = ["http://localhost:5173"]
 
     # ── Fusion Weights ─────────────────────────────────────────────────

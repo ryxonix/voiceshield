@@ -203,9 +203,19 @@ def _json_field(raw) -> dict:
 
 # ── Audio decoding helpers ─────────────────────────────────────────────────
 def _decode_audio_bytes(data: bytes) -> np.ndarray:
-    """Decode uploaded audio bytes to mono float32 at the pipeline sample rate."""
+    """Decode uploaded audio bytes to mono float32 at the pipeline sample rate.
+
+    Accepts both WAV containers (soundfile) and — for byte-parity with the
+    engine hot loop and the gRPC detect surface, which the SDK promises are
+    identical on identical PCM windows (`sdk/voiceshield_sdk/grpc.py:9-13`) —
+    raw 16-bit mono PCM at the pipeline sample rate (no container, no header).
+    """
     import soundfile as sf
     import librosa
+
+    if not data.startswith(b"RIFF"):
+        pcm16 = np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
+        return np.clip(pcm16, -1.0, 1.0)
 
     audio, file_sr = sf.read(io.BytesIO(data), dtype="float32", always_2d=True)
     audio = audio[:, 0]

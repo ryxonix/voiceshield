@@ -75,6 +75,11 @@ backend/reports/*.pdf
 temp_repo/
 voiceshield_cloud/
 
+# gRPC proto regen scratch (never commit)
+backend/sdk/_pb2_backup/
+backend/sdk/_regen/
+backend/sdk/gen_probe*.py
+
 # OS / Editor
 .DS_Store
 Thumbs.db
