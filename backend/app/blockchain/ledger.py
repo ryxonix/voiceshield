@@ -143,8 +143,12 @@ def anchor_report(
     try:
         with open(file_path, "rb") as fh:
             file_sha256 = sha256_hex(fh.read())
-    except (FileNotFoundError, OSError):
-        file_sha256 = sha256_hex(b"")
+    except (FileNotFoundError, OSError) as e:
+        # Never anchor sha256(b"") for an unreadable file: that would commit a
+        # fake evidence hash into a tamper-evident chain. Fail loudly instead.
+        raise FileNotFoundError(
+            f"Cannot anchor report — file unreadable: {file_path} ({e})"
+        ) from e
 
     merkle = merkle_root(window_leaves or [])
     prev = store.get_latest_block()

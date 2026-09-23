@@ -341,9 +341,14 @@ def add_incident(
     context_json: str = "{}",
 ) -> None:
     _execute(
-        "INSERT OR REPLACE INTO incidents (id, session_id, role, language, severity, "
+        "INSERT INTO incidents (id, session_id, role, language, severity, "
         "score, base_score, context_json, triggers, speaker_mismatch, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))",
+        "VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now')) "
+        "ON CONFLICT(id) DO UPDATE SET "
+        "session_id=excluded.session_id, role=excluded.role, language=excluded.language, "
+        "severity=excluded.severity, score=excluded.score, base_score=excluded.base_score, "
+        "context_json=excluded.context_json, triggers=excluded.triggers, "
+        "speaker_mismatch=excluded.speaker_mismatch",
         (
             iid,
             session_id,

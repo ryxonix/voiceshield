@@ -110,7 +110,7 @@ The `.env` has clearly-marked sections. Here is exactly what goes where:
 | Email API (alt) | `RESEND_API_KEY` | https://resend.com |
 | Error tracking | `SENTRY_DSN` | https://sentry.io |
 | Training data | `HF_TOKEN` | https://huggingface.co/settings/tokens (needed only for private gated repos; FLEURS is public) |
-| Database | `DATABASE_URL` | free serverless Neon PostgreSQL (optional — blank = in-memory store) |
+| Telemetry store | `DATABASE_URL` | reserved for optional Neon PostgreSQL — detection telemetry persists to local SQLite (`backend/voiceshield.db`) regardless |
 
 **Blockchain API keys** → the same file, section `⛓ BLOCKCHAIN REPORT LEDGER`:
 - The report ledger is **local and needs NO external key** (`BLOCKCHAIN_DIFFICULTY` is just the PoW difficulty, default 4).
@@ -146,12 +146,13 @@ Double-click **`start_all.bat`** (backend :8000 + frontend :5173).
 |---|---|---|
 | POST | `/api/analyze` | Analyze an uploaded audio file (full windowed sweep) |
 | POST | `/api/detect` | Quick detection on a single audio payload |
-| WS | `/ws/live/{call_id}` | Live streaming detection during a call |
+| WS | `/ws/stream/{call_id}` | Live streaming detection during a call |
 | GET | `/api/sessions` | List sessions |
 | GET | `/api/sessions/{sid}` | Session detail |
 | GET | `/api/sessions/{sid}/windows` | Per-window telemetry |
 | GET | `/api/incidents` | List incidents |
-| GET | `/api/incidents/{iid}` / `.../ack` | Incident detail / acknowledge |
+| GET | `/api/incidents/{iid}` | Incident detail |
+| POST | `/api/incidents/{iid}/ack` | Acknowledge an incident |
 | GET | `/api/incidents/{iid}/report` | Incident forensic PDF |
 | GET | `/api/report/{call_id}` | Forensic PDF by call id |
 | GET | `/api/blockchain` | Ledger status + all blocks |

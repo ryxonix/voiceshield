@@ -46,6 +46,10 @@ def _to_ist_str(ts: Any) -> str:
     if isinstance(ts, str):
         try:
             dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                # Naive strings are UTC in the store's contract (UUID-prefixed
+                # ISO-8601); never treat them as local time before converting.
+                dt = dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S IST")
         except Exception:
             return ts

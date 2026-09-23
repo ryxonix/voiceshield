@@ -13,7 +13,7 @@ fail-open, and never raises.
 
 import json
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from app.config import settings
 
@@ -55,34 +55,43 @@ _DEFAULT_RULES: List[Dict] = [
 _DEFAULTS = {"version": 1, "rules": _DEFAULT_RULES}
 
 
-def _default_path() -> str:
+def _resolve_path(path: str) -> str:
+    """Resolve a possibly-relative path against the backend root."""
+    if not path or os.path.isabs(path):
+        return path
     backend_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )  # app/mitigation/workflows.py -> backend/
-    return os.path.normpath(os.path.join(backend_root, "workflows.json"))
+    return os.path.normpath(os.path.join(backend_root, path))
 
 
-def _load() -> Dict:
+def _default_path() -> str:
+    return _resolve_path("workflows.json")
+
+
+def _load() -> tuple[Dict, str]:
+    """Load the workflow config; returns (config, human-readable source)."""
     configured = settings.workflows_path
     if not configured:
-        return _DEFAULTS
-    path = configured if os.path.isabs(configured) else _default_path()
+        return _DEFAULTS, "bundled_defaults"
+    path = _resolve_path(configured)
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict) and isinstance(data.get("rules"), list) and data["rules"]:
-            return data
+            return data, path
     except Exception:  # noqa: BLE001
         pass
-    return _DEFAULTS
+    return _DEFAULTS, "bundled_defaults (active file missing or malformed)"
 
 
-def resolve_workflow(band: str, role: str = "adult") -> Dict:
+def resolve_workflow(band: str, role: str = "adult", data: Optional[Dict] = None) -> Dict:
     """
     Pick the most specific rule whose band_min is satisfied by the current band.
     Returns a dict with keys: role, band_min, actions, channels.
     """
-    data = _load()
+    if data is None:
+        data, _ = _load()
     level = _BAND_ORDER.get(band, 1)
     best = None
     for rule in data["rules"]:
@@ -104,11 +113,13 @@ def resolve_workflow(band: str, role: str = "adult") -> Dict:
 
 def get_workflow_config() -> Dict:
     """Return the full parsed workflow config (for the /api/workflows route)."""
-    return _load()
+    data, _ = _load()
+    return data
 
 
 def workflow_detail(band: str, role: str = "adult") -> Dict:
-    rule = resolve_workflow(band, role)
+    data, source = _load()
+    rule = resolve_workflow(band, role, data=data)
     return {
         "band": band,
         "role": role,
@@ -118,7 +129,5 @@ def workflow_detail(band: str, role: str = "adult") -> Dict:
             "actions": rule.get("actions", []),
             "channels": rule.get("channels", []),
         },
-        "config_source": (
-            _default_path() if settings.workflows_path else "bundled_defaults"
-        ),
+        "config_source": source,
     }

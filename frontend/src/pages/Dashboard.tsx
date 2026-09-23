@@ -23,7 +23,7 @@ export default function Dashboard({ liveOnly = false, onNavigate }: { liveOnly?:
           title={t('Live call monitor')}
           meta={
             <>
-              {t('Real-time stream analysis over WebSocket · 300 ms windows, 100 ms hop · PCM 16 kHz mono.')}{' '}
+              {t('Real-time stream analysis over WebSocket · 3 s windows, 1 s hop (Dhwani) · PCM 16 kHz mono.')}{' '}
               <a className="underline decoration-[#E4E4E7] underline-offset-2 hover:decoration-zinc-400" href="#" onClick={(e) => { e.preventDefault(); onNavigate('dashboard') }}>
                 {t('Back to overview')}
               </a>
@@ -93,8 +93,8 @@ export default function Dashboard({ liveOnly = false, onNavigate }: { liveOnly?:
 
       {/* Stat cards */}
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <StatCard label={t('Detection latency')} value="< 50 ms" note={t('ONNX Runtime, 2 CPU threads')} />
-        <StatCard label={t('Window cadence')} value="300 ms" note={t('100 ms sliding hop')} />
+        <StatCard label={t('Detection latency')} value="≤ 78 ms" note={t('per-window design budget, ONNX, 2 CPU threads')} />
+        <StatCard label={t('Window cadence')} value="3 s / 1 s" note={t('Dhwani window / hop · 300 ms / 100 ms legacy fallback')} />
         <StatCard label={t('Languages')} value="EN · HI · KN" note={t('accent-invariant features')} />
       </div>
 
@@ -268,7 +268,7 @@ function LivePanel({ live, role, setRole, language, setLanguage, speaker, setSpe
         <div className="grid gap-4 md:grid-cols-2">
           <div className="card p-5">
             <h3 className="text-[14px] font-bold text-zinc-900">{t('XAI breakdown')}</h3>
-            <p className="mb-3 text-[12px] text-zinc-500">{t('Latest 300 ms window')}</p>
+            <p className="mb-3 text-[12px] text-zinc-500">{t('Latest window')}</p>
             <div className="grid items-start gap-4 sm:grid-cols-2">
               <XaiBars ev={latest} />
               <Radar ev={latest} />

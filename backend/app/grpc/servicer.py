@@ -1,4 +1,4 @@
-﻿"""
+"""
 VoiceShield AI â€” gRPC Service Layer (A1)
 
 Implements the `VoiceShield` Service from `backend/sdk/voiceshield.proto`
@@ -76,7 +76,7 @@ def _pcm16_to_float(pcm: bytes) -> np.ndarray:
     return raw.astype(np.float32) / 32768.0
 
 
-def _windowed(audio_f32: np.ndarray, role: str = "adult", max_windows: int = 300):
+def _windowed(audio_f32: np.ndarray, role: str = "adult", max_windows: int = 300, include_xlsr: bool = False):
     """Slide windowed frames and run the pipeline â€” mirrors main._process_windowed."""
     from app.engine.pipeline import analyze_window
     from app.engine.ring_buffer import RingBuffer
@@ -112,7 +112,7 @@ def _windowed(audio_f32: np.ndarray, role: str = "adult", max_windows: int = 300
     windows = []
     peak = 0.0
     for idx, frame in enumerate(frames):
-        ev = analyze_window(frame, role=role)
+        ev = analyze_window(frame, role=role, include_xlsr=include_xlsr)
         score = float(ev["synthetic_score"])
         peak = max(peak, score)
         windows.append(
@@ -155,20 +155,30 @@ class VoiceShield(VoiceShieldServicer):
 
     # â”€â”€ Detection (single shot, PCM16 bytes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
     def Detect(self, request: DetectRequest, context) -> DetectResponse:
-        from app.config import settings
-        
+        from app.engine.dhwani import get_detector
 
-        audio = _pcm16_to_float(request.audio)
-        _, peak, _count = _windowed(audio, role="adult")
-        role = "adult"
+        detector = get_detector()
+        if not detector.is_ready:
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details("Detection model not loaded yet.")
+            return DetectResponse(label="unknown", synthetic_score=0.5, confidence=0.5)
 
-        thresh = settings.adult_threshold if role == "adult" else settings.child_threshold
-        label = "spoof" if peak >= thresh else "bonafide"
-        confidence = float(min(1.0, abs(peak - thresh) * 8.0 + 0.5))  # distanceâ†’confidence
+        try:
+            # Exactly mirrors POST /api/detect: Dhwani single-shot over the
+            # decoded float audio, so gRPC and REST agree byte-for-byte on
+            # identical 16 kHz PCM (label, synthetic_score, confidence).
+            audio = _pcm16_to_float(request.audio)
+            result = detector.predict_array(audio, sr=16000)
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Dhwani gRPC detection failed: {e}")
+            context.set_code(grpc.StatusCode.INTERNAL)
+            context.set_details(f"Dhwani inference failed: {e}")
+            return DetectResponse(label="unknown", synthetic_score=0.5, confidence=0.5)
+
         return DetectResponse(
-            label=label,
-            synthetic_score=round(float(peak), 4),
-            confidence=round(confidence, 4),
+            label=str(result.get("label", "unknown")),
+            synthetic_score=round(float(result.get("synthetic_score", 0.5)), 4),
+            confidence=round(float(result.get("confidence", 0.5)), 4),
         )
 
     # â”€â”€ Analyze (sliding windows + contextual enrichment) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -178,7 +188,9 @@ class VoiceShield(VoiceShieldServicer):
 
         role = request.role or "adult"
         audio = _pcm16_to_float(request.audio)
-        windows, peak, count = _windowed(audio, role=role)
+        # include_xlsr=True mirrors POST /api/analyze (main._process_windowed),
+        # so REST and gRPC Analyze yield identical windows on identical PCM.
+        windows, peak, count = _windowed(audio, role=role, include_xlsr=True)
 
         ctx = CallContext.from_mapping(
             {

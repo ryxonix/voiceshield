@@ -386,7 +386,7 @@ function FileAnalyzer() {
       <div className="card p-6">
         <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">{t('Analyze a recording')}</h3>
         <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-zinc-500">
-          {t('Upload a call recording (wav, mp3, flac). VoiceShield resamples to 16 kHz, slides a 300 ms window across the file, and returns the full per-window XAI breakdown.')}
+          {t('Upload a call recording (wav, mp3, flac). VoiceShield resamples to 16 kHz, slides a window across the file (3 s window / 1 s hop with Dhwani; 300 ms / 100 ms legacy fallback), and returns the full per-window XAI breakdown.')}
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <input
@@ -461,7 +461,7 @@ function SpeakerEnroll() {
     <div className="card p-6">
       <h3 className="font-serif text-[20px] font-bold tracking-tight text-zinc-900">{t('Enroll a trusted speaker')}</h3>
       <p className="mt-1 max-w-xl text-[13.5px] leading-relaxed text-zinc-500">
-        {t('Upload about ten seconds of genuine speech per person. Live sessions tagged with this label are compared against the stored embedding (pgvector cosine similarity); a mismatch adds +0.10 to the fused risk score.')}
+        {t('Upload about ten seconds of genuine speech per person. Live sessions tagged with this label are compared against the stored embedding; a mismatch adds +0.15 to the fused risk score.')}
       </p>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <input

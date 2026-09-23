@@ -62,8 +62,8 @@ The code all lives in one module: `backend/training/cloud_dataset.py`
    - Saves the fine-tuned model to Drive and optionally pushes it to the Hub.
 3. **`colab_03_train_xlsr.ipynb`** → same, with the bigger XLS-R model.
 4. Download the saved model, drop it into `backend/models/<name>/`, and point
-   `backend/app/config.py` (`AI_MODEL_PATH`) at it (or load directly from the
-   HF Hub at runtime).
+   `backend/app/config.py` at it — set `ONNX_MODEL_PATH=models/<name>/model.onnx`
+   in `backend/.env` (or load directly from the HF Hub at runtime).
 
 ### B. Kaggle
 

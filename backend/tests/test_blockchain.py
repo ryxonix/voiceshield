@@ -113,13 +113,16 @@ class TestAnchorAndVerify:
     def test_missing_file_detected(self):
         from app.blockchain import ledger
         pdf = "/tmp/nonexistent_voiceshield_test.pdf"
-        ledger.anchor_report(
-            call_id="missing-001", report_id="F-missing",
-            incident_id=None, file_path=pdf, window_leaves=[],
-        )
+        # Anchoring a missing PDF must fail loudly: committing sha256(b"") as
+        # evidence would poison a tamper-evident chain.
+        with pytest.raises(FileNotFoundError):
+            ledger.anchor_report(
+                call_id="missing-001", report_id="F-missing",
+                incident_id=None, file_path=pdf, window_leaves=[],
+            )
         result = ledger.verify_report("missing-001")
         assert result["valid"] is False
-        assert any("missing" in p.lower() for p in result["problems"])
+        assert "no blockchain anchor" in result["error"].lower()
 
     def test_no_anchor_returns_error(self):
         from app.blockchain import ledger

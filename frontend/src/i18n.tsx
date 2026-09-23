@@ -53,8 +53,8 @@ const hi: Record<string, string> = {
   'Detection latency': 'डिटेक्शन विलंबता',
   'Window cadence': 'विंडो गति',
   Languages: 'भाषाएँ',
-  'ONNX Runtime, 2 CPU threads': 'ONNX Runtime, 2 CPU थ्रेड',
-  '100 ms sliding hop': '100 ms स्लाइडिंग हॉप',
+  'per-window design budget, ONNX, 2 CPU threads': 'प्रति-विंडो डिज़ाइन बजट, ONNX, 2 CPU थ्रेड',
+  'Dhwani window / hop · 300 ms / 100 ms legacy fallback': 'Dhwani विंडो / हॉप · 300 ms / 100 ms लेगेसी फ़ॉलबैक',
   'accent-invariant features': 'उच्चारण-स्वतंत्र विशेषताएँ',
 
   /* ── Dashboard: pipeline explainer ─────────────────────────────────── */
@@ -109,7 +109,7 @@ const hi: Record<string, string> = {
   Verdict: 'वर्डिक्ट',
   'NF drops': 'NF drops',
   'XAI breakdown': 'XAI विश्लेषण',
-  'Latest 300 ms window': 'नवीनतम 300 ms विंडो',
+  'Latest window': 'नवीनतम विंडो',
   'Speaker mismatch — possible impersonation.': 'स्पीकर मेल नहीं खाता — नक़ल हो सकती है।',
   'Consistent with the enrolled voice.': 'पंजीकृत आवाज़ से मेल खाता है।',
   Mitigation: 'उपाय',
@@ -183,8 +183,8 @@ const hi: Record<string, string> = {
 
   /* ── Reports: analyze ──────────────────────────────────────────────── */
   'Analyze a recording': 'रिकॉर्डिंग का विश्लेषण',
-  'Upload a call recording (wav, mp3, flac). VoiceShield resamples to 16 kHz, slides a 300 ms window across the file, and returns the full per-window XAI breakdown.':
-    'कॉल रिकॉर्डिंग अपलोड करें (wav, mp3, flac)। VoiceShield उसे 16 kHz पर रीसैंपल करता है, फ़ाइल पर 300 ms की विंडो चलाता है, और हर विंडो का पूरा XAI विश्लेषण देता है।',
+  'Upload a call recording (wav, mp3, flac). VoiceShield resamples to 16 kHz, slides a window across the file (3 s window / 1 s hop with Dhwani; 300 ms / 100 ms legacy fallback), and returns the full per-window XAI breakdown.':
+    'कॉल रिकॉर्डिंग अपलोड करें (wav, mp3, flac)। VoiceShield उसे 16 kHz पर रीसैंपल करता है, फ़ाइल पर एक विंडो चलाता है (Dhwani के साथ 3 s विंडो / 1 s हॉप; अन्यथा 300 ms / 100 ms लेगेसी), और हर विंडो का पूरा XAI विश्लेषण देता है।',
   'Analyzing…': 'विश्लेषण हो रहा है…',
   Analyze: 'विश्लेषण करें',
   'error.Analysis failed — is the backend reachable?': 'विश्लेषण विफल — क्या बैकएंड उपलब्ध है?',
@@ -194,8 +194,8 @@ const hi: Record<string, string> = {
 
   /* ── Reports: speakers ─────────────────────────────────────────────── */
   'Enroll a trusted speaker': 'भरोसेमंद स्पीकर पंजीकृत करें',
-  'Upload about ten seconds of genuine speech per person. Live sessions tagged with this label are compared against the stored embedding (pgvector cosine similarity); a mismatch adds +0.10 to the fused risk score.':
-    'हर व्यक्ति की लगभग दस सेकंड की असली आवाज़ अपलोड करें। इस लेबल वाले लाइव सत्रों की तुलना सहेजे गए embedding से होती है (pgvector cosine similarity); बेमेल होने पर fused risk score में +0.10 जुड़ता है।',
+  'Upload about ten seconds of genuine speech per person. Live sessions tagged with this label are compared against the stored embedding; a mismatch adds +0.15 to the fused risk score.':
+    'हर व्यक्ति की लगभग दस सेकंड की असली आवाज़ अपलोड करें। इस लेबल वाले लाइव सत्रों की तुलना सहेजे गए embedding से होती है; बेमेल होने पर fused risk score में +0.15 जुड़ता है।',
   'Speaker label': 'स्पीकर लेबल',
   Enroll: 'पंजीकरण',
   'msg.Provide a label and a genuine voice sample.': 'लेबल और असली आवाज़ का नमूना दें।',
@@ -274,8 +274,8 @@ const kn: Record<string, string> = {
   'Detection latency': 'ಪತ್ತೆ ವಿಳಂಬ',
   'Window cadence': 'ವಿಂಡೋ ವೇಗ',
   Languages: 'ಭಾಷೆಗಳು',
-  'ONNX Runtime, 2 CPU threads': 'ONNX Runtime, 2 CPU ಥ್ರೆಡ್',
-  '100 ms sliding hop': '100 ms ಸ್ಲೈಡಿಂಗ್ ಹೆಜ್ಜೆ',
+  'per-window design budget, ONNX, 2 CPU threads': 'ಪ್ರತಿ-ವಿಂಡೋ ವಿನ್ಯಾಸ ಬಜೆಟ್, ONNX, 2 CPU ಥ್ರೆಡ್',
+  'Dhwani window / hop · 300 ms / 100 ms legacy fallback': 'Dhwani ವಿಂಡೋ / ಹಾಪ್ · 300 ms / 100 ms ಲೆಗಸಿ ಫಾಲ್‌ಬ್ಯಾಕ್',
   'accent-invariant features': 'ಉಚ್ಚಾರ-ಸ್ವತಂತ್ರ ವೈಶಿಷ್ಟ್ಯಗಳು',
 
   /* ── Dashboard: pipeline explainer ─────────────────────────────────── */
@@ -330,7 +330,7 @@ const kn: Record<string, string> = {
   Verdict: 'ತೀರ್ಪು',
   'NF drops': 'NF drops',
   'XAI breakdown': 'XAI ವಿಭಜನೆ',
-  'Latest 300 ms window': 'ಇತ್ತೀಚಿನ 300 ms ವಿಂಡೋ',
+  'Latest window': 'ಇತ್ತೀಚಿನ ವಿಂಡೋ',
   'Speaker mismatch — possible impersonation.': 'ಸ್ಪೀಕರ್ ಹೊಂದಾಣಿಕೆ ಇಲ್ಲ — ಸಂಭಾವ್ಯ ನಕಲಿ.',
   'Consistent with the enrolled voice.': 'ನೋಂದಾಯಿತ ಧ್ವನಿಯೊಂದಿಗೆ ಹೊಂದಿಕೊಳ್ಳುತ್ತದೆ.',
   Mitigation: 'ಕ್ರಮ',
@@ -404,8 +404,8 @@ const kn: Record<string, string> = {
 
   /* ── Reports: analyze ──────────────────────────────────────────────── */
   'Analyze a recording': 'ರೆಕಾರ್ಡಿಂಗ್ ವಿಶ್ಲೇಷಣೆ',
-  'Upload a call recording (wav, mp3, flac). VoiceShield resamples to 16 kHz, slides a 300 ms window across the file, and returns the full per-window XAI breakdown.':
-    'ಕರೆ ರೆಕಾರ್ಡಿಂಗ್ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ (wav, mp3, flac). VoiceShield ಅದನ್ನು 16 kHz ಗೆ ಮರುಮಾದರಿ ಮಾಡಿ, ಫೈಲ್‌ನಾದ್ಯಂತ 300 ms ವಿಂಡೋ ಸರಿಸಿ, ಪ್ರತಿ ವಿಂಡೋದ ಸಂಪೂರ್ಣ XAI ವಿಭಜನೆಯನ್ನು ನೀಡುತ್ತದೆ.',
+  'Upload a call recording (wav, mp3, flac). VoiceShield resamples to 16 kHz, slides a window across the file (3 s window / 1 s hop with Dhwani; 300 ms / 100 ms legacy fallback), and returns the full per-window XAI breakdown.':
+    'ಕರೆ ರೆಕಾರ್ಡಿಂಗ್ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ (wav, mp3, flac). VoiceShield ಅದನ್ನು 16 kHz ಗೆ ಮರುಮಾದರಿ ಮಾಡಿ, ಫೈಲ್‌ನಾದ್ಯಂತ ವಿಂಡೋ ಸರಿಸಿ (Dhwani ಜೊತೆ 3 s ವಿಂಡೋ / 1 s ಹಾಪ್; ಇಲ್ಲದಿದ್ದರೆ 300 ms / 100 ms ಲೆಗಸಿ), ಪ್ರತಿ ವಿಂಡೋದ ಸಂಪೂರ್ಣ XAI ವಿಭಜನೆಯನ್ನು ನೀಡುತ್ತದೆ.',
   'Analyzing…': 'ವಿಶ್ಲೇಷಿಸಲಾಗುತ್ತಿದೆ…',
   Analyze: 'ವಿಶ್ಲೇಷಿಸಿ',
   'error.Analysis failed — is the backend reachable?': 'ವಿಶ್ಲೇಷಣೆ ವಿಫಲ — ಬ್ಯಾಕೆಂಡ್ ಲಭ್ಯವಿದೆಯೇ?',
@@ -415,8 +415,8 @@ const kn: Record<string, string> = {
 
   /* ── Reports: speakers ─────────────────────────────────────────────── */
   'Enroll a trusted speaker': 'ವಿಶ್ವಾಸಾರ್ಹ ಸ್ಪೀಕರ್ ನೋಂದಾಯಿಸಿ',
-  'Upload about ten seconds of genuine speech per person. Live sessions tagged with this label are compared against the stored embedding (pgvector cosine similarity); a mismatch adds +0.10 to the fused risk score.':
-    'ಪ್ರತಿ ವ್ಯಕ್ತಿಯ ಸುಮಾರು ಹತ್ತು ಸೆಕೆಂಡ್ ನಿಜವಾದ ಧ್ವನಿ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ. ಈ ಲೇಬಲ್ ಇರುವ ಲೈವ್ ಸೆಷನ್‌ಗಳನ್ನು ಸಂಗ್ರಹಿಸಿದ embedding ನೊಂದಿಗೆ ಹೋಲಿಸಲಾಗುತ್ತದೆ (pgvector cosine similarity); ಹೊಂದಾಣಿಕೆ ಇಲ್ಲದಿದ್ದರೆ fused risk score ಗೆ +0.10 ಸೇರುತ್ತದೆ.',
+  'Upload about ten seconds of genuine speech per person. Live sessions tagged with this label are compared against the stored embedding; a mismatch adds +0.15 to the fused risk score.':
+    'ಪ್ರತಿ ವ್ಯಕ್ತಿಯ ಸುಮಾರು ಹತ್ತು ಸೆಕೆಂಡ್ ನಿಜವಾದ ಧ್ವನಿ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ. ಈ ಲೇಬಲ್ ಇರುವ ಲೈವ್ ಸೆಷನ್‌ಗಳನ್ನು ಸಂಗ್ರಹಿಸಿದ embedding ನೊಂದಿಗೆ ಹೋಲಿಸಲಾಗುತ್ತದೆ; ಹೊಂದಾಣಿಕೆ ಇಲ್ಲದಿದ್ದರೆ fused risk score ಗೆ +0.15 ಸೇರುತ್ತದೆ.',
   'Speaker label': 'ಸ್ಪೀಕರ್ ಲೇಬಲ್',
   Enroll: 'ನೋಂದಾಯಿಸಿ',
   'msg.Provide a label and a genuine voice sample.': 'ಲೇಬಲ್ ಮತ್ತು ನಿಜವಾದ ಧ್ವನಿ ಮಾದರಿ ನೀಡಿ.',

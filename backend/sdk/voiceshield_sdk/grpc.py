@@ -10,7 +10,7 @@ enrichment, risk bands, incident store, and tamper-evident ledger as the REST
 app (see `app.grpc.servicer`), a gRPC `detect()` / `analyze()` returns the same
 scores, bands, recommendation, recommended actions, and context detail as the
 REST SDK on the same 16 kHz PCM audio + same context - parity is by
-construction and asserted byte-for-byte in `tests/test_sdk_grpc.py`.
+construction and asserted byte-for-byte in `tests/test_parity_live.py`.
 
 Threading model:
   * `VoiceShieldGrpcClient`    - synchronous facade on a plain `grpc.Channel`.
@@ -24,9 +24,8 @@ Both accept an injected `channel=...` so test-suites can pass an in-process
 
 from __future__ import annotations
 
-import io
+import inspect
 import logging
-import wave
 from typing import Any, Dict, List, Optional, Union
 
 import grpc

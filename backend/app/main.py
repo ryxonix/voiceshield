@@ -11,7 +11,6 @@ import io
 import json
 import logging
 import os
-import tempfile
 import time
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -382,12 +381,16 @@ async def detect_audio(
 
     try:
         contents = await file.read()
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename or ".wav")[1]) as tmp:
-            tmp.write(contents)
-            tmp_path = tmp.name
-
-        result = detector.predict_file(tmp_path)
-        os.unlink(tmp_path)  # DPDP: delete immediately after inference
+        try:
+            # Container formats (wav/flac/mp3/ogg): same decode predict_file used.
+            import soundfile as sf
+            audio, file_sr = sf.read(io.BytesIO(contents), dtype="float32")
+        except Exception:
+            # Raw 16-bit mono PCM @16 kHz (no header) — the SDK's byte-parity
+            # promise (sdk/voiceshield_sdk/grpc.py). No temp files (DPDP).
+            audio = _decode_audio_bytes(contents)
+            file_sr = settings.sample_rate
+        result = detector.predict_array(audio, file_sr)
 
         result["language_hint"] = language
         result["filename"] = file.filename
@@ -448,15 +451,14 @@ async def analyze_file(
             }
         )
         ctx_score, ctx_detail = enrich_score(peak, ctx, role)
+        ctx_band = risk_band(ctx_score, role)
 
         return {
             "peak_score": round(ctx_score, 4),
-            "risk_band": risk_band(ctx_score, role),
+            "risk_band": ctx_band,
             "windows_analyzed": count,
-            "recommendation": recommendation(band, role),
-            "recommended_actions": recommended_actions(
-                risk_band(ctx_score, role), role
-            ),
+            "recommendation": recommendation(ctx_band, role),
+            "recommended_actions": recommended_actions(ctx_band, role),
             "context": ctx_detail if ctx.provided else None,
             "windows": windows,
         }
@@ -898,26 +900,12 @@ async def generate_report(call_id: str):
 
     session_data = _session_data_from_store(call_id)
     if session_data is None:
-        # Fallback for standalone audio uploads or demo calls
-        session_data = {
-            "call_id": call_id,
-            "role": "adult",
-            "start_time": "2026-09-11T06:30:00Z",
-            "end_time": "2026-09-11T06:35:00Z",
-            "peak_score": 0.942,
-            "peak_prosodics": {
-                "jitter_pct": 3.42,
-                "shimmer_pct": 6.18,
-                "phase_continuity": 0.41,
-                "pitch_stability_pct": 94.2,
-            },
-            "action_taken": "TELEGRAM_ALERT_DISPATCHED",
-            "history": [
-                {"window_index": 1, "synthetic_score": 0.21, "timestamp": "2026-09-11T06:30:10Z"},
-                {"window_index": 2, "synthetic_score": 0.68, "timestamp": "2026-09-11T06:31:15Z"},
-                {"window_index": 3, "synthetic_score": 0.942, "timestamp": "2026-09-11T06:32:00Z"},
-            ],
-        }
+        # No stored telemetry for this call — refuse to fabricate forensic
+        # evidence. A forensic PDF must never contain invented scores/dates.
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"No session telemetry for call '{call_id}'.", "detail": "Forensic reports are generated only from persisted session windows."},
+        )
 
     # Generate PDF file in backend/reports directory as well as temp for download
     reports_dir = os.path.join(os.path.dirname(__file__), "..", "reports")
