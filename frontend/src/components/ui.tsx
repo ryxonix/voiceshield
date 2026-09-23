@@ -297,6 +297,7 @@ type HookReturn = {
   latency: number
   connect: (opts: { role: string; language: string; speaker: string }) => void
   sendEnd: () => void
+  callId: string | null
   shielding: boolean
   mitigation: any
   error: string | null
@@ -310,6 +311,7 @@ export function useLiveSession(): HookReturn {
   const [events, setEvents] = useState<any[]>([])
   const [micActive, setMicActive] = useState(false)
   const [latency, setLatency] = useState(0)
+  const [callId, setCallId] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const audioRef = useRef<{ ctx: AudioContext; stream: MediaStream; proc: ScriptProcessorNode } | null>(null)
   const [shielding, setShielding] = useState(false)
@@ -343,7 +345,9 @@ export function useLiveSession(): HookReturn {
     setError(null)
     setEvents([])
     const q = new URLSearchParams({ role: opts.role, language: opts.language, speaker: opts.speaker })
-    const ws = new WebSocket(`${wsBase()}/ws/stream/demo-${Date.now().toString(36)}?${q}`)
+    const id = `demo-${Date.now().toString(36)}`
+    setCallId(id)
+    const ws = new WebSocket(`${wsBase()}/ws/stream/${id}?${q}`)
     ws.binaryType = 'arraybuffer'
     wsRef.current = ws
     ws.onopen = () => {
@@ -428,5 +432,5 @@ export function useLiveSession(): HookReturn {
     stop()
   }, [])
 
-  return { connected, micActive, events, latency, connect, sendEnd, shielding, mitigation, error, setShielded, stop } as HookReturn
+  return { connected, micActive, events, latency, connect, sendEnd, callId, shielding, mitigation, error, setShielded, stop } as HookReturn
 }

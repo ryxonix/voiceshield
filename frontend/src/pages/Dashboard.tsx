@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Breadcrumbs, PageHeader, Divider, Sparkline, useLiveSession, btn } from '../components/ui'
+import { Breadcrumbs, PageHeader, Divider, Sparkline, useLiveSession, btn, apiBase } from '../components/ui'
 import { RiskGauge, XaiBars } from '../components/RiskGauge'
 import { Radar } from '../components/Radar'
 import { ShieldBanner } from '../components/ShieldBanner'
@@ -170,7 +170,7 @@ export default function Dashboard({ liveOnly = false, onNavigate }: { liveOnly?:
 
 function LivePanel({ live, role, setRole, language, setLanguage, speaker, setSpeaker, compact = false }: any) {
   const { t, tVerdict } = useI18n()
-  const { connected, micActive, events, latency, shielding, mitigation, setShielded, error } = live
+  const { connected, micActive, events, latency, shielding, mitigation, setShielded, error, callId } = live
   const analyses = useMemo(() => events.filter((e: any) => e.type === 'analysis'), [events])
   const latest = analyses.at(-1)
   const scores = analyses.map((a: any) => a.synthetic_score ?? 0)
@@ -219,6 +219,11 @@ function LivePanel({ live, role, setRole, language, setLanguage, speaker, setSpe
             <button className="btn-pill w-full justify-center" onClick={live.sendEnd}>
               {t('End session')}
             </button>
+          )}
+          {!connected && callId && (
+            <a className="btn-pill w-full justify-center" href={`${apiBase()}/api/report/${callId}`} download>
+              {t('Export PDF')}
+            </a>
           )}
           <div className="flex items-center justify-center gap-1.5 text-[12px] text-zinc-500">
             <span

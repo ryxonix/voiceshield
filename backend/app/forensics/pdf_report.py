@@ -18,6 +18,8 @@ from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
 )
 
+from app.engine.risk import risk_band, threshold_for, verdict_for
+
 logger = logging.getLogger(__name__)
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -35,14 +37,19 @@ def _add_footer(canvas, doc):
     canvas.restoreState()
 
 
-def _to_ist_str(ts: Any) -> str:
-    """Convert various timestamp formats to IST string."""
+def _to_ist_str(ts: Any, *, suffix: bool = True) -> str:
+    """Convert various timestamp formats to IST string.
+
+    `suffix=False` drops the trailing " IST" (used in table cells whose column
+    header already declares IST) so timestamps stay inside their column width.
+    """
+    fmt = "%Y-%m-%d %H:%M:%S IST" if suffix else "%Y-%m-%d %H:%M:%S"
     if ts is None:
         return "N/A"
     if isinstance(ts, datetime):
-        return ts.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S IST")
+        return ts.astimezone(IST).strftime(fmt)
     if isinstance(ts, (int, float)):
-        return datetime.fromtimestamp(ts, IST).strftime("%Y-%m-%d %H:%M:%S IST")
+        return datetime.fromtimestamp(ts, IST).strftime(fmt)
     if isinstance(ts, str):
         try:
             dt = datetime.fromisoformat(ts)
@@ -50,7 +57,7 @@ def _to_ist_str(ts: Any) -> str:
                 # Naive strings are UTC in the store's contract (UUID-prefixed
                 # ISO-8601); never treat them as local time before converting.
                 dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(IST).strftime("%Y-%m-%d %H:%M:%S IST")
+            return dt.astimezone(IST).strftime(fmt)
         except Exception:
             return ts
     return str(ts)
@@ -108,6 +115,10 @@ def generate_forensic_pdf(
         "Bullet", parent=normal_style,
         leftIndent=20, bulletIndent=10, spaceAfter=4, fontSize=10,
     )
+    cell_style = ParagraphStyle(
+        "TblCell", parent=normal_style,
+        fontName="Helvetica", fontSize=8, leading=10,
+    )
 
     elements = []
 
@@ -130,25 +141,34 @@ def generate_forensic_pdf(
     elements.append(Paragraph("Session Metadata", heading_style))
 
     call_id = session_data.get("call_id", "N/A")
-    start_str = _to_ist_str(session_data.get("start_time"))
-    end_str = _to_ist_str(session_data.get("end_time"))
+    start_str = _to_ist_str(session_data.get("start_time"), suffix=False)
+    end_str = _to_ist_str(session_data.get("end_time"), suffix=False)
     peak_score = session_data.get("peak_score", 0.0)
     role = session_data.get("role", "N/A")
     action = session_data.get("action_taken", "N/A")
 
     meta_header = ["Call ID", "Start (IST)", "End (IST)", "Peak Score", "Role", "Action"]
-    meta_row = [str(call_id), start_str, end_str, f"{peak_score:.4f}", str(role), str(action)]
+    # Cells are Paragraphs so long values wrap inside their column instead of
+    # bleeding into the neighbouring one ("IST2026-09-23..." overflow bug).
+    meta_row = [
+        Paragraph(str(call_id), cell_style),
+        Paragraph(str(start_str), cell_style),
+        Paragraph(str(end_str), cell_style),
+        Paragraph(f"{float(peak_score or 0.0):.4f}", cell_style),
+        Paragraph(str(role), cell_style),
+        Paragraph(str(action), cell_style),
+    ]
 
     meta_table = Table(
         [meta_header, meta_row],
-        colWidths=[1.2 * inch, 1.2 * inch, 1.2 * inch, 0.9 * inch, 0.7 * inch, 1.0 * inch],
+        colWidths=[1.05 * inch, 1.4 * inch, 1.4 * inch, 0.85 * inch, 0.55 * inch, 1.35 * inch],
     )
     meta_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1a237e")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
         ("FONTSIZE", (0, 0), (-1, 0), 9),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("ALIGN", (1, 1), (5, 1), "CENTER"),
         ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#e8eaf6")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ("FONTSIZE", (0, 1), (-1, -1), 8),
@@ -157,6 +177,41 @@ def generate_forensic_pdf(
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
     elements.append(meta_table)
+    elements.append(Spacer(1, 0.15 * inch))
+
+    # ── Risk Score ──────────────────────────────────────────────────
+    elements.append(Paragraph("Risk Score", heading_style))
+
+    risk_score = float(peak_score or 0.0)
+    risk_role = str(role) if isinstance(role, str) else "adult"
+    band = str(session_data.get("risk_band") or risk_band(risk_score, risk_role))
+    thr = session_data.get("threshold")
+    threshold = float(thr) if thr not in (None, "") else threshold_for(risk_role)
+    verdict = str(session_data.get("verdict") or verdict_for(band, risk_role))
+
+    risk_rows = [
+        ["Peak fused score", f"{risk_score:.4f}   ({risk_score * 100:.1f}%)"],
+        ["Risk band", band.capitalize()],
+        ["Role / threshold", f"{risk_role}  /  {threshold:.2f}"],
+        ["Verdict", verdict.capitalize()],
+        ["Action taken", str(action)],
+    ]
+    risk_label = ParagraphStyle(
+        "RiskLbl", parent=cell_style, fontName="Helvetica-Bold", textColor=colors.HexColor("#1a237e"),
+    )
+    risk_table = Table(
+        [[Paragraph(k, risk_label), Paragraph(str(v), cell_style)] for k, v in risk_rows],
+        colWidths=[1.6 * inch, 5.0 * inch],
+    )
+    risk_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#e8eaf6")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    elements.append(risk_table)
     elements.append(Spacer(1, 0.15 * inch))
 
     # ── Peak Risk XAI Snapshot ─────────────────────────────────────
@@ -199,7 +254,7 @@ def generate_forensic_pdf(
         timeline_rows = [timeline_header]
         for entry in history[:30]:  # Cap at 30 entries for page space
             idx = entry.get("window_index", "—")
-            ts = _to_ist_str(entry.get("timestamp"))
+            ts = _to_ist_str(entry.get("timestamp"), suffix=False)
             score = entry.get("synthetic_score", 0.0)
             # Color-code score
             timeline_rows.append([str(idx), ts, f"{score:.4f}"])

@@ -8,6 +8,7 @@ import tempfile
 from datetime import datetime, timezone, timedelta
 
 import pytest
+from pypdf import PdfReader
 from app.forensics.pdf_report import generate_forensic_pdf
 
 
@@ -81,3 +82,17 @@ class TestForensicPDF:
             pdf_path = os.path.join(tmpdir, "minimal_report.pdf")
             generate_forensic_pdf(minimal_data, pdf_path)
             assert os.path.exists(pdf_path)
+
+    def test_pdf_mentions_risk_score(self):
+        """PDF surfaces a composed Risk Score section (score, band, threshold, verdict)."""
+        session_data = self._make_session_data()  # child, peak 0.92
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdf_path = os.path.join(tmpdir, "risk_report.pdf")
+            generate_forensic_pdf(session_data, pdf_path)
+            reader = PdfReader(pdf_path)
+            text = "\n".join((page.extract_text() or "") for page in reader.pages)
+        assert "Risk Score" in text
+        assert "0.9200" in text and "92.0%" in text
+        assert "Critical" in text          # risk band from peak 0.92
+        assert "child" in text and "0.70" in text  # role / child threshold
+        assert "Synthetic" in text        # verdict_for(critical, child)
