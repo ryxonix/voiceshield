@@ -5,6 +5,7 @@ import Incidents from './pages/Incidents'
 import Reports from  './pages/Reports'
 import { LanguageProvider, useT } from './i18n'
 import { apiBase } from './components/ui'
+import ProjectWorking from './pages/ProjectWorking'
 
 type View =
   | 'dashboard'
@@ -14,6 +15,7 @@ type View =
   | 'blockchain'
   | 'analyze'
   | 'speakers'
+  | 'project'
 
 function AppInner() {
   const t = useT()
@@ -48,6 +50,11 @@ function AppInner() {
       label: t('Identity'),
       items: [{ id: 'speakers', label: t('Speaker enrollment') }],
     },
+    {
+      id: 'about',
+      label: 'Project Working',
+      items: [{ id: 'project', label: 'Project Working' }],
+    },
   ]
 
   return (
@@ -64,6 +71,7 @@ function AppInner() {
             {view === 'blockchain' && <Reports initialTab="blockchain" />}
             {view === 'analyze' && <Reports initialTab="analyze" />}
             {view === 'speakers' && <Reports initialTab="speakers" />}
+            {view === 'project' && <ProjectWorking />}
           </div>
         </main>
       </div>
