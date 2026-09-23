@@ -13,6 +13,7 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import numpy as np
@@ -321,11 +322,25 @@ def _session_data_from_store(call_id: str) -> dict | None:
     if sess is None:
         return None
     windows = store.get_windows(call_id)
+
+    # sessions.started_at is SQLite datetime('now') — a naive UTC string.
+    # windows.t_ms is the ms offset from the session start, so the absolute
+    # wall-clock time of a window is started_at + t_ms.
+    start_dt = None
+    if isinstance(sess.get("started_at"), str):
+        try:
+            start_dt = datetime.fromisoformat(sess["started_at"]).replace(tzinfo=timezone.utc)
+        except ValueError:
+            start_dt = None
+
     history = [
         {
             "window_index": i,
             "synthetic_score": w["synthetic_score"],
-            "timestamp": None,
+            "timestamp": (
+                (start_dt + timedelta(milliseconds=w["t_ms"])).timestamp()
+                if start_dt is not None else None
+            ),
         }
         for i, w in enumerate(windows)
     ]
