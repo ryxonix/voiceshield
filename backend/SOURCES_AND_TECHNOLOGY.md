@@ -34,7 +34,7 @@ the on-device and the cloud pipeline.
 | Audio DSP | Librosa | ISC | pyin f0, STFT, prosody features |
 | Audio IO | SoundFile (libsndfile) | BSD-3-Clause | Read/write WAV/FLAC |
 | ML framework | PyTorch (CPU) | BSD-3-Clause | AASIST-L training + official AASIST-L inference |
-| Inference | ONNX Runtime | MIT | INT8-quantized CPU inference (sub-100 ms) |
+| Inference | ONNX Runtime | MIT | INT8-quantized CPU inference (~0.78 s per 3 s window, reference CPU) |
 | Model A | Dhwani (Wav2Vec2 XLS-R + AASIST, ONNX) | MIT (weights) | Primary multilingual Indian deepfake detector |
 | Model B | AASIST-L official (clovaai/aasist pretrained) | MIT | Ensemble detector / countermeasure backbone |
 | Model C | AASIST-L-local (ours, fine-tuned) | MIT (ours) | Fallback / retrained on FLEURS+TTS |

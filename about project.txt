@@ -3,9 +3,12 @@ VOICESHIELD AI
 Complete Project Overview, Technology & Data-Source Inventory
 ================================================================================
 
-Last updated : 19-Sep-2026
+Last updated : 23-Sep-2026
 Scope        : Full repository audit - backend, frontend, cloud training kit,
                ML models, data sources, versions, licenses, and integrations.
+Pass note    : latency-profile reality (realtime vs ensemble), gRPC surface
+               completed (SDK timeout, known_contact 3-state, single-process
+               gRPC+REST on :50051), and NBF blockchain anchor MANDATORY.
 
 --------------------------------------------------------------------------------
 1. EXECUTIVE SUMMARY
@@ -21,7 +24,11 @@ Target users  : telecom providers, banks, contact centers, parents
                 ("Child Shield" mode)
 Design goals  : free stack built on open / permissive licenses (attribution
                 retained); SIH-hackathon-compliant data;
-                DPDP Act 2023 privacy posture; sub-100 ms per-window latency.
+                DPDP Act 2023 privacy posture; per-window latency governed by an
+                explicit latency profile (realtime / ensemble), enforced by a
+                fail-hard gate — see §8. Real-time streaming keeps analysis
+                ahead of the audio cadence using a trained fast detector;
+                forensic file-analysis runs the full multi-model ensemble.
 Detection mix : ensemble of acoustic deep models + explainable prosodic
                 features (jitter / shimmer / phase continuity) + cross-session
                 speaker consistency + enterprise watermark check.
@@ -60,11 +67,24 @@ pushed per logical milestone.
   the device network)           --> I4C-ready forensic PDF
                                         |
                                         v
-                            SHA-256 + Merkle root anchored to a local
-                            proof-of-work (PoW) blockchain ledger
-                            (optional Hyperledger-Fabric / IPFS external anchor)
+SHA-256 + Merkle root anchored to a local
+                             proof-of-work (PoW) blockchain ledger
+                             (MANDATORY Hyperledger-Fabric / IPFS external
+                             anchor — fail-closed by default; No Fabric
+                             gateway, No unanchored report.)
 
 Privacy: raw audio lives only in RAM and is overwritten every window.
+
+Latency profiles (single hot loop, two budgets; see §8):
+  - latency_profile = realtime (default): the streaming WebSocket and the
+    live path score each 3 s window with the trained AASIST-L official
+    detector + XAI prosody, so analysis finishes before the next window
+    arrives. Documented real-time budget (measured median ~1.5-1.6 s on the
+    reference CPU) is enforced fail-hard by tests/test_latency_gate.py.
+  - latency_profile = ensemble: real-time windows run the full ensemble
+    (Dhwani + AASIST-L official [+ XLS-R]); per-window latency is seconds
+    scale by design. The forensic /api/analyze surface ALWAYS uses the full
+    ensemble regardless of profile (accuracy path, bounded as a batch job).
 
 --------------------------------------------------------------------------------
 3. REPOSITORY STRUCTURE
@@ -280,9 +300,13 @@ Privacy: raw audio lives only in RAM and is overwritten every window.
   Hugging Face    model/data push + download   HF_TOKEN              https://huggingface.co/settings/tokens
   Blockchain      LOCAL PoW SHA-256 ledger     BLOCKCHAIN_DIFFICULTY  (no key needed)
   NBF Lite anchor Hyperledger-Fabric + IPFS   BLOCKCHAIN_EXTERNAL_ANCHOR etc.  deploy/nbf-fabric/
-                  (opt-in, default OFF -> local DemoAnchor shadow records the
-                  same payload offline with status 'demo'; when True the gateway
-                  is required and failures degrade to 'pending' / retryable)
+                  (MANDATORY by default: BLOCKCHAIN_EXTERNAL_ANCHOR=true +
+                  BLOCKCHAIN_ANCHOR_REQUIRED=true. A forensic report is only
+                  committed to the local ledger AFTER a real on-chain anchor
+                  succeeded — any gateway failure raises BlockAnchorError and
+                  the report is refused (fail-closed). DemoAnchor / 'pending'
+                  degrade is available ONLY by explicitly disabling both flags
+                  for offline dev/demo.)
   DoT escalation  Sanchar Saathi / Chakshu / DIP  CHAKSHU_DIP_WEBHOOK_URL (optional)
                   suspected-fraud metadata routing via webhook - citizen-facing
                   portals (NO public API), so this is OUR documented integration
@@ -295,16 +319,28 @@ Privacy: raw audio lives only in RAM and is overwritten every window.
   Alerts are optional; missing keys are skipped at runtime.
 
 --------------------------------------------------------------------------------
-8. LATENCY / PERFORMANCE BUDGET (per 3 s analysis window)
+8. LATENCY / PERFORMANCE (measured, one hot loop, two profiles)
 --------------------------------------------------------------------------------
 
   Stage                                Budget
   ------------------------------------ -------
-  WebSocket ingest + ring buffer       <= 7 ms
-  Prosodic feature extraction          <= 20 ms
-  Model inference (INT8 CPU ONNX)      <= 35 ms
-  Watermark + fusion + mitigation      <= 16 ms
-  TOTAL                                <= 78 ms
+  REAL-TIME profile (default)           measured ~1.5-1.6 s median per 3 s
+  (AASIST-L official + XAI prosody)     window on reference CPU; enforced
+                                        fail-hard at latency_budget_ms=2000
+                                        by tests/test_latency_gate.py (env
+                                        override VOICESHIELD_LATENCY_BUDGET_MS
+                                        is the ONLY silent-relaxation path,
+                                        and it is printed when used).
+  ENSEMBLE profile (opt-in streaming;   Dhwani ~1.9 s; Dhwani + AASIST-L
+  ALWAYS for /api/analyze & gRPC        official ~4.1 s; +CloudXLSR ~5.7 s
+  Analyze)                              per 3 s window. No streaming-latency
+                                        contract — batch/forensic surface,
+                                        bounded by the SDK RPC timeout.
+  Original 78 ms TOTAL budget           RETIRED — measured unreachable on CPU
+  (ingest <=7 / prosody <=20 / move     (librosa.pyin prosody alone ~0.77 s,
+  <=35 / fusion <=16)                   AASIST-L official ~0.78 s). The doc
+                                        now states the real numbers instead
+                                        of fabricating a budget.
 
   Windows: 3 s / 1 s hop default (300 ms / 100 ms fallback for legacy AASIST).
   Risk thresholds: adult >= 0.85 critical; child >= 0.70 critical.
@@ -343,7 +379,11 @@ Privacy: raw audio lives only in RAM and is overwritten every window.
 
   Test files (backend/tests/): test_features (prosody),
   test_fusion, test_ring_buffer, test_websocket, test_pdf_report,
-  test_external_anchor, test_blockchain. Run:
+  test_external_anchor, test_blockchain, test_parity_live (Gate B: cross-
+  surface byte parity REST/gRPC), test_latency_gate (Gate A: real-time hot
+  loop budget, fail-hard), test_grpc_known_contact (incl. known_contact
+  3-state over gRPC + REST parity), test_mandatory_anchor (NBF fail-closed
+  posture). Run:
     cd backend && venv\Scripts\python.exe -m pytest -q
 
   Backend code size (backend/app/): ~4,500 lines of Python across 28 modules.
@@ -367,7 +407,9 @@ Privacy: raw audio lives only in RAM and is overwritten every window.
   REST API surface: /api/analyze, /api/detect, /api/sessions,
   /api/incidents (+ report/ack), /api/report/{call_id}, /api/blockchain,
   /api/blockchain/onchain, /api/speakers/register, /health, /info,
-  and WS /ws/live/{call_id}.
+  WebSocket /ws/stream/{call_id}, and the gRPC VoiceShield service on
+  :50051 (started in-process with the REST app, or standalone via
+  python -m app.grpc.server).
 
 ================================================================================
 END OF DOCUMENT

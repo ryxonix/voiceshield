@@ -1,8 +1,11 @@
 # VoiceShield AI · NBF-Lite / Fabric external anchor
 
-Optional, **fail-open** counterpart to the local report block-chain (see
-`backend/app/blockchain/ledger.py`). When enabled, every forensic report's
-block gets a second, independently-verifiable commitment:
+**Mandatory, fail-closed by default** external counterpart to the local report
+block-chain (see `backend/app/blockchain/ledger.py`). With the production
+posture on (`BLOCKCHAIN_EXTERNAL_ANCHOR=true` + `BLOCKCHAIN_ANCHOR_REQUIRED=true`
+— the defaults), every forensic report's block gets a second,
+independently-verifiable commitment, and a report that cannot be anchored is
+rejected (503, no block inserted):
 
 1. the report PDF is encrypted (AES-256-GCM, org-custody key) and pinned to
    **IPFS** as ciphertext — raw content never leaves the operator,
@@ -11,10 +14,13 @@ block gets a second, independently-verifiable commitment:
 3. anyone can verify the public anchor via the backend API:
    `GET /api/blockchain/onchain/{call_id}`.
 
-If the gateway is unreachable the local PoW chain stays authoritative and the
-anchor is marked `pending` (retryable via
-`POST /api/blockchain/retry/{call_id}`). No Fabric node → anchors fall back to
-a truthful `demo` status.
+If the gateway is unreachable in the mandatory posture, `anchor_report` raises
+`BlockAnchorError` — the local block is NOT inserted and the report endpoints
+return 503 (see `external_anchor.py`). The graceful `pending` (retryable via
+`POST /api/blockchain/retry/{call_id}`) and truthful `demo` fallback statuses
+exist **only** when the operator explicitly disables both flags for offline
+dev/demo (`BLOCKCHAIN_EXTERNAL_ANCHOR=false` +
+`BLOCKCHAIN_ANCHOR_REQUIRED=false`).
 
 ```
 ┌──────────────┐  POST /store (cipher b64)      ┌──────────────┐   IPFS (Kubo)

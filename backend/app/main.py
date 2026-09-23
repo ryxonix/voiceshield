@@ -105,6 +105,26 @@ async def lifespan(app: FastAPI):
         channels.append("Neon PostgreSQL")
     logger.info(f"  Alert channels & Services: {channels or ['None configured']}")
     logger.info(f"  Thresholds: adult={settings.adult_threshold}, child={settings.child_threshold}")
+
+    # Start the external gRPC service alongside the REST app so bank /
+    # contact-center / telecom integrations get the same VoiceShield surface
+    # on settings.grpc_port (default 50051) without running a second process.
+    # Graceful: if the port is already in use (a standalone `python -m
+    # app.grpc.server` is running), the app logs the fact and continues.
+    grpc_server = None
+    try:
+        from app.grpc import server as grpc_server_module
+
+        grpc_server = grpc_server_module.create_server()
+        if getattr(grpc_server, "_vs_bound", 0):
+            await grpc_server.start()
+            logger.info(f"gRPC VoiceShield service started on :{settings.grpc_port}")
+        else:
+            grpc_server = None
+    except Exception as e:  # noqa: BLE001 - never crash REST because of gRPC
+        logger.warning(f"gRPC service not started: {e}")
+        grpc_server = None
+
     logger.info("═" * 60)
 
     yield  # ── Application runs here ──
@@ -116,6 +136,12 @@ async def lifespan(app: FastAPI):
         await session_manager.destroy_all()
     except Exception:
         pass
+    if grpc_server is not None:
+        try:
+            from app.grpc import server as grpc_server_module
+            await grpc_server_module.stop(grpc_server)
+        except Exception:  # noqa: BLE001
+            pass
     logger.info("Shutdown complete.")
 
 
@@ -263,7 +289,9 @@ def _process_windowed(audio_float: np.ndarray, role: str = "adult", max_windows:
     peak = 0.0
 
     for idx, frame in enumerate(frames):
-        ev = analyze_window(frame, role=role, include_xlsr=True)
+        # Forensic file-analysis path ALWAYS uses the full ensemble, regardless
+        # of latency_profile; the real-time profile is for live streaming only.
+        ev = analyze_window(frame, role=role, include_xlsr=True, realtime=False)
         t_ms = idx * step_ms
         peak = max(peak, ev["synthetic_score"])
         windows.append(
@@ -608,6 +636,7 @@ async def generate_incident_report(iid: str):
     try:
         from app.blockchain import ledger
         from app.blockchain.ledger import CHAIN_ID
+        from app.blockchain.external_anchor import BlockAnchorError
         generate_forensic_pdf(
             session_data,
             saved_pdf_path,
@@ -630,6 +659,16 @@ async def generate_incident_report(iid: str):
             path=saved_pdf_path,
             filename=f"VoiceShield_Incident_{iid}.pdf",
             media_type="application/pdf",
+        )
+    except BlockAnchorError as e:
+        # Mandatory mode (BLOCKCHAIN_ANCHOR_REQUIRED=true): no anchor, no hand-off.
+        logger.error(f"Blockchain anchor refused for incident {iid}: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": f"Report NOT blockchain-anchored: {e}",
+                "detail": "BLOCKCHAIN_ANCHOR_REQUIRED=true — unanchored evidence is refused for forensic hand-off. On-chain anchoring failed; the report was not committed to the ledger.",
+            },
         )
     except Exception as e:
         logger.error(f"PDF generation failed for {iid}: {e}")
@@ -835,14 +874,25 @@ def _store_anchor_enabled() -> bool:
 async def blockchain_retry_anchor(call_id: str):
     """Re-attempt the external Fabric/IPFS anchor for a pending report block."""
     from app.blockchain import external_anchor, ledger
+    from app.blockchain.external_anchor import BlockAnchorError
 
     block = _store.get_block_by_call(call_id)
     if block is None:
         return JSONResponse(status_code=404, content={"error": f"No block found for call '{call_id}'. Generate a report first."})
     provider = external_anchor.get_provider()
-    if provider.name == "demo":
+    if not settings.blockchain_anchor_required and provider.name == "demo":
         return JSONResponse(status_code=400, content={"error": "External anchor disabled (BLOCKCHAIN_EXTERNAL_ANCHOR=false)."})
-    result = external_anchor.retry_anchor(block)
+    try:
+        result = external_anchor.retry_anchor(block)
+    except BlockAnchorError as e:
+        logger.error(f"Retry anchor failed for {call_id}: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": f"Anchor retry failed — still not blockchain-anchored: {e}",
+                "detail": "BLOCKCHAIN_ANCHOR_REQUIRED=true — the anchor did not succeed on-chain. The block stays unanchored; re-run once the NBF gateway/provider is healthy.",
+            },
+        )
     return result
 
 
@@ -915,6 +965,7 @@ async def generate_report(call_id: str):
     try:
         from app.blockchain import ledger
         from app.blockchain.ledger import CHAIN_ID
+        from app.blockchain.external_anchor import BlockAnchorError
         generate_forensic_pdf(
             session_data,
             saved_pdf_path,
@@ -936,6 +987,16 @@ async def generate_report(call_id: str):
             path=saved_pdf_path,
             filename=f"VoiceShield_Forensic_Report_{call_id}.pdf",
             media_type="application/pdf",
+        )
+    except BlockAnchorError as e:
+        # Mandatory mode (BLOCKCHAIN_ANCHOR_REQUIRED=true): no anchor, no hand-off.
+        logger.error(f"Blockchain anchor refused for {call_id}: {e}")
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": f"Report NOT blockchain-anchored: {e}",
+                "detail": "BLOCKCHAIN_ANCHOR_REQUIRED=true — unanchored evidence is refused for forensic hand-off. On-chain anchoring failed; the report was not committed to the ledger.",
+            },
         )
     except Exception as e:
         logger.error(f"PDF generation failed for {call_id}: {e}")

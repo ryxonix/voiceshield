@@ -25,6 +25,7 @@ Verification:
 import hashlib
 import json
 import logging
+import threading
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
@@ -38,6 +39,12 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 CHAIN_ID = "VoiceShieldAIV1"
 GENESIS_HASH = "0" * 64
+
+# Serializes the read-latest-block → index-assign → mine → insert sequence so
+# two concurrent report generations can never pick the same block_index and
+# collide on the PRIMARY KEY (fast, single-process; all anchor_report callers
+# run in this process).
+_LEDGER_LOCK = threading.Lock()
 
 
 # ── Hashing helpers ────────────────────────────────────────────────────────
@@ -124,6 +131,7 @@ def mine_block(
                 "prev_hash": prev_hash,
                 "nonce": nonce,
                 "block_hash": h,
+                "difficulty": int(diff),
             }
         nonce += 1
 
@@ -139,48 +147,83 @@ def anchor_report(
     """
     Hash the final PDF, build evidence Merkle root, mine and commit a block.
     Returns the committed block dict.
+
+    Order matters for the mandate: the block is mined, then the external
+    NBF/Fabric anchor runs, and ONLY a successful (or, in default fail-open
+    mode, a best-effort demo/pending) anchor leads to the block being inserted
+    into the local ledger. In mandatory mode (`BLOCKCHAIN_ANCHOR_REQUIRED=true`)
+    any anchor failure raises `BlockAnchorError` before the block is inserted,
+    so the ledger never contains an unanchored report.
     """
-    try:
-        with open(file_path, "rb") as fh:
-            file_sha256 = sha256_hex(fh.read())
-    except (FileNotFoundError, OSError) as e:
-        # Never anchor sha256(b"") for an unreadable file: that would commit a
-        # fake evidence hash into a tamper-evident chain. Fail loudly instead.
-        raise FileNotFoundError(
-            f"Cannot anchor report — file unreadable: {file_path} ({e})"
-        ) from e
+    with _LEDGER_LOCK:
+        try:
+            with open(file_path, "rb") as fh:
+                file_sha256 = sha256_hex(fh.read())
+        except (FileNotFoundError, OSError) as e:
+            # Never anchor sha256(b"") for an unreadable file: that would commit a
+            # fake evidence hash into a tamper-evident chain. Fail loudly instead.
+            raise FileNotFoundError(
+                f"Cannot anchor report — file unreadable: {file_path} ({e})"
+            ) from e
 
-    merkle = merkle_root(window_leaves or [])
-    prev = store.get_latest_block()
-    prev_hash = prev["block_hash"] if prev else GENESIS_HASH
-    index = (prev["block_index"] + 1) if prev else 0
-
-    block = mine_block(
-        index=index,
-        report_id=report_id,
-        call_id=call_id,
-        incident_id=incident_id,
-        file_sha256=file_sha256,
-        merkle=merkle,
-        prev_hash=prev_hash,
-        difficulty=0 if index == 0 else None,
-    )
-    block["file_path"] = file_path
-    store.insert_block(**block)
-
-    # Optional I4C / NBF-Lite external anchor: commit the block hash + the
-    # report's IPFS ciphertext CID to a Hyperledger Fabric ledger. Fail-open:
-    # local chain stays authoritative; anchor marked pending if gateway is down.
-    try:
         from app.blockchain import external_anchor
 
-        external = external_anchor.anchor_block(block)
-        block["external_anchor"] = external
-    except Exception as e:  # pragma: no cover - defensive
-        logger.warning(f"External anchor hook failed: {e}")
-        block["external_anchor"] = {"anchor_status": "pending", "error": f"{type(e).__name__}: {e}"}
+        merkle = merkle_root(window_leaves or [])
+        prev = store.get_latest_block()
+        prev_hash = prev["block_hash"] if prev else GENESIS_HASH
+        index = (prev["block_index"] + 1) if prev else 0
 
-    return block
+        block = mine_block(
+            index=index,
+            report_id=report_id,
+            call_id=call_id,
+            incident_id=incident_id,
+            file_sha256=file_sha256,
+            merkle=merkle,
+            prev_hash=prev_hash,
+            difficulty=0 if index == 0 else None,
+        )
+        block["file_path"] = file_path
+
+        # Anchor rows must be written against a clean block dict — without the
+        # locally-computed `difficulty` key, which is not a stored column for
+        # the anchor row, and without `file_path`/`external_anchor` (those live
+        # in the blocks row only). Hand the anchor a shallow copy minus those.
+        anchor_input = {
+            "block_index": block["block_index"],
+            "timestamp": block["timestamp"],
+            "report_id": block["report_id"],
+            "call_id": block["call_id"],
+            "incident_id": block["incident_id"],
+            "file_path": block["file_path"],
+            "file_sha256": block["file_sha256"],
+            "merkle_root": block["merkle_root"],
+            "prev_hash": block["prev_hash"],
+            "nonce": block["nonce"],
+            "block_hash": block["block_hash"],
+        }
+
+        # External I4C / NBF-Lite anchor — run BEFORE the local commit so the
+        # mandated (fail-closed) posture never persists an unanchored block.
+        if settings.blockchain_anchor_required:
+            external = external_anchor.anchor_block(block, strict=True)
+        # Default fail-open: local chain stays authoritative; the anchor row is
+        # best-effort — 'demo' (offline) or 'pending' (gateway down), exactly as
+        # today, and an unanchored row never blocks the local commit.
+        else:
+            try:
+                external = external_anchor.anchor_block(block)
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(f"External anchor hook failed: {e}")
+                external = {"anchor_status": "pending", "error": f"{type(e).__name__}: {e}"}
+
+        # Commit the local block only after the anchor attempt: the dict handed
+        # to the store must stay clean (no `external_anchor` column), while the
+        # anchor itself is persisted to the block_anchors table and surfaces on
+        # the returned dict.
+        store.insert_block(**block)
+        block["external_anchor"] = external
+        return block
 
 
 # ── Verification ───────────────────────────────────────────────────────────
@@ -212,7 +255,12 @@ def file_sha256_on_disk(block: Dict[str, Any]) -> str:
 
 
 def _check_pow(block: Dict[str, Any]) -> bool:
-    tgt = _target(int(settings.blockchain_difficulty))
+    # Use the difficulty locked into the block itself; rows migrated from a
+    # pre-difficulty schema have no value yet, so fall back to the current
+    # setting for those (genuine anchors update the column going forward).
+    stored = block.get("difficulty")
+    diff = stored if stored is not None else settings.blockchain_difficulty
+    tgt = _target(int(diff))
     return block["block_hash"].startswith(tgt)
 
 
@@ -229,7 +277,8 @@ def verify_chain() -> Dict[str, Any]:
         if _recompute_block_hash(b) != b["block_hash"]:
             problems.append("block hash does not match fields")
         # Genesis (index 0) is the trusted root and is mined with difficulty 0,
-        # so proof-of-work is only enforced on blocks 1+.
+        # so proof-of-work is only enforced on blocks 1+ using the difficulty
+        # that block N was actually mined with (stored per block).
         if b["block_index"] != 0 and not _check_pow(b):
             problems.append("proof-of-work difficulty not met")
         if problems:
@@ -271,8 +320,20 @@ def verify_report(call_id: str) -> Dict[str, Any]:
         ext = external_anchor.anchor_status_for_call(call_id)
         if ext.get("anchor_status") in ("anchored", "demo"):
             ext["onchain_verification"] = external_anchor.verify_anchor(call_id, block)
+        # Mandated (fail-closed) posture: a report that is not really
+        # on-chain cannot verify clean.
+        if (
+            settings.blockchain_anchor_required
+            and ext.get("anchor_status") != "anchored"
+        ):
+            problems.append(
+                "external NBF/Fabric anchor is REQUIRED but status is "
+                f"{ext.get('anchor_status')!r} — report is not blockchain-anchored"
+            )
     except Exception as e:  # pragma: no cover - defensive
         ext = {"anchor_status": "unavailable", "error": f"{type(e).__name__}: {e}"}
+        if settings.blockchain_anchor_required:
+            problems.append(f"external anchor unavailable under mandatory mode: {e}")
 
     return {
         "valid": not problems,

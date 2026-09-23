@@ -58,20 +58,33 @@ def _is_silent(window: np.ndarray) -> bool:
     return False
 
 
-def _model_probability(window: np.ndarray, *, include_xlsr: bool = False) -> float:
+def _model_probability(
+    window: np.ndarray,
+    *,
+    include_xlsr: bool = False,
+    realtime: bool | None = None,
+) -> float:
     """Run the best available trained models and ensemble their outputs.
 
-    - If Dhwani AND the official pretrained AASIST-L are both loaded,
-      returns the average of the two spoof probabilities (ensemble).
-    - If only one is available, uses it alone.
-    - Legacy local AASIST-L is a last resort (untrained).
+    - Ensemble mode (realtime=False): if Dhwani AND the official pretrained
+      AASIST-L are both loaded, returns the average of the two spoof
+      probabilities; if only one is available, uses it alone; legacy local
+      AASIST-L is a last resort (untrained).
+    - Realtime mode (realtime=True, the default streaming profile): runs ONLY
+      the trained AASIST-L official detector (+ legacy fallback if it is not
+      ready) — Dhwani and XLS-R are never touched, keeping the live hot loop
+      inside the real-time latency budget (~1.5-1.6 s/window on reference CPU).
 
+    `realtime=None` resolves to `settings.latency_profile == "realtime"`.
     `include_xlsr` gates the heavy cloud-trained XLS-R-300m detector, which
-    takes seconds per window on CPU — reserved for the file-analysis path so
-    real-time streaming stays within the ~78 ms per-window latency budget.
+    takes seconds per window on CPU — reserved for the ensemble file-analysis
+    path, never for real-time streaming.
     """
     if _is_silent(window):
         return 0.0
+
+    if realtime is None:
+        realtime = settings.latency_profile == "realtime"
 
     log = __import__("logging").getLogger(__name__)
     win_f32 = (window.astype(np.float32) / 32768.0).copy()
@@ -79,19 +92,9 @@ def _model_probability(window: np.ndarray, *, include_xlsr: bool = False) -> flo
     aasist_official_prob: float | None = None
     cloud_xlsr_prob: float | None = None
 
-    # ── Dhwani ─────────────────────────────────────────────────────────
-    try:
-        from app.engine.dhwani import get_detector
-        det = get_detector()
-        if det.is_ready:
-            result = det.predict_array(win_f32)
-            prob = result.get("synthetic_score")
-            if prob is not None:
-                dhwani_prob = float(np.clip(prob, 0.0, 1.0))
-    except Exception as exc:
-        log.warning("Dhwani unavailable: %s", exc)
-
     # ── AASIST-L official (pretrained, MIT license) ────────────────────
+    # Always tried first and used in BOTH profiles: it is the real-time
+    # workhorse (fast single model) and an ensemble member for forensics.
     try:
         from app.engine.aasist_official import get_aasist_official
         ao = get_aasist_official()
@@ -100,27 +103,45 @@ def _model_probability(window: np.ndarray, *, include_xlsr: bool = False) -> flo
     except Exception as exc:
         log.warning("AASIST-L official unavailable: %s", exc)
 
-    # ── Cloud XLS-R (trained Wav2Vec2 sequence classification) ─────────
-    # Optional: only for /api/analyze. load() is idempotent and lazily
-    # pulls in the 1.2 GB checkpoint on first file analysis.
-    if include_xlsr:
+    if realtime:
+        boxes = [aasist_official_prob]
+    else:
+        # ── Dhwani (ensemble path only) ────────────────────────────────
         try:
-            from app.engine.wfp import CloudXLSR
-            detector = CloudXLSR.get_instance()
-            if detector.is_ready or detector.load():
-                cloud_xlsr_prob = float(detector.predict_spoof(
-                    win_f32, sr=settings.sample_rate))
+            from app.engine.dhwani import get_detector
+            det = get_detector()
+            if det.is_ready:
+                result = det.predict_array(win_f32)
+                prob = result.get("synthetic_score")
+                if prob is not None:
+                    dhwani_prob = float(np.clip(prob, 0.0, 1.0))
         except Exception as exc:
-            log.warning("Cloud XLS-R unavailable: %s", exc)
+            log.warning("Dhwani unavailable: %s", exc)
 
-    # ── Ensemble ───────────────────────────────────────────────────────
+        # ── Cloud XLS-R (trained Wav2Vec2 sequence classification) ─────
+        # Optional: only for /api/analyze. load() is idempotent and lazily
+        # pulls in the 1.2 GB checkpoint on first file analysis.
+        if include_xlsr:
+            try:
+                from app.engine.wfp import CloudXLSR
+                detector = CloudXLSR.get_instance()
+                if detector.is_ready or detector.load():
+                    cloud_xlsr_prob = float(detector.predict_spoof(
+                        win_f32, sr=settings.sample_rate))
+            except Exception as exc:
+                log.warning("Cloud XLS-R unavailable: %s", exc)
+
+        boxes = [p for p in (dhwani_prob, aasist_official_prob, cloud_xlsr_prob) if p is not None]
+
+    # ── Result ─────────────────────────────────────────────────────────
     # Average of every *trained* model that actually loaded. The cloud
     # XLS-R (sih_cloud_xlsr) is the trained 300m box; Dhwani and AASIST-L
     # official are the two MIT-licensed pretrained boxes. Any subset that
-    # is ready participates (we never degrade to untrained legacy).
-    boxes = [p for p in (dhwani_prob, aasist_official_prob, cloud_xlsr_prob) if p is not None]
-    if boxes:
-        return float(np.clip(sum(boxes) / len(boxes), 0.0, 1.0))
+    # is ready participates (we never degrade to untrained legacy unless
+    # NO trained box is available at all).
+    ready = [p for p in boxes if p is not None]
+    if ready:
+        return float(np.clip(sum(ready) / len(ready), 0.0, 1.0))
     log.warning("No trained models available — falling back to legacy untrained AASIST-L")
     return float(AASISTInference.get_instance().predict(window))
 
@@ -131,6 +152,7 @@ def analyze_window(
     role: str = "adult",
     speaker_mismatch: bool | None = None,
     include_xlsr: bool = False,
+    realtime: bool | None = None,
 ) -> dict:
     """
     Run the full per-window detection pipeline on an int16 PCM window.
@@ -142,14 +164,19 @@ def analyze_window(
                 pitch_stability, noise_floor_dropouts, watermark_snr},
         latency_ms
 
+    `realtime` (bool | None): True = trained AASIST-L official + XAI prosody
+    only (real-time streaming profile); False = full Dhwani ensemble;
+    None resolves to `settings.latency_profile == "realtime"`.
+
     `include_xlsr` enables the heavy cloud-trained XLS-R-300m detector
-    (seconds/window) — use it only for the file-analysis path, never for
-    real-time streaming.
+    (seconds/window) — use it only for the ensemble file-analysis path,
+    never for real-time streaming.
     """
     prosodics = extract_prosodics(window, sr=settings.sample_rate)
 
     t0 = time.perf_counter()
-    model_prob = _model_probability(window, include_xlsr=include_xlsr)
+    model_prob = _model_probability(
+        window, include_xlsr=include_xlsr, realtime=realtime)
     latency_ms = (time.perf_counter() - t0) * 1000
 
     watermark = check_watermark(

@@ -81,7 +81,7 @@ export default function Dashboard({ liveOnly = false, onNavigate }: { liveOnly?:
       <div className="space-y-5 leading-relaxed text-zinc-700">
         <p>
           {t(
-            'Every 300 milliseconds, VoiceShield extracts a fresh window from the call stream and runs it through three independent checks: a graph-attention acoustic model (AASIST-L), sub-phonemic prosodic analysis — jitter, shimmer and spectral phase continuity — and a watermark verifier that recognizes authorized enterprise callers instantly.'
+            'Every second, VoiceShield slides a fresh window across the call stream and runs it through three independent checks: a graph-attention acoustic model (AASIST-L), sub-phonemic prosodic analysis — jitter, shimmer and spectral phase continuity — and a watermark verifier that recognizes authorized enterprise callers instantly.'
           )}
         </p>
         <p>
@@ -93,7 +93,7 @@ export default function Dashboard({ liveOnly = false, onNavigate }: { liveOnly?:
 
       {/* Stat cards */}
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
-        <StatCard label={t('Detection latency')} value="≤ 78 ms" note={t('per-window design budget, ONNX, 2 CPU threads')} />
+        <StatCard label={t('Detection latency')} value="~1.5 s" note={t('realtime profile · per 3 s window · ONNX, 2 CPU threads · ≤ 2000 ms budget')} />
         <StatCard label={t('Window cadence')} value="3 s / 1 s" note={t('Dhwani window / hop · 300 ms / 100 ms legacy fallback')} />
         <StatCard label={t('Languages')} value="EN · HI · KN" note={t('accent-invariant features')} />
       </div>

@@ -17,11 +17,18 @@ Flow (per report):
        recording call/report/incident ids, block hash, merkle root,
        timestamp, ipfs_cid, enc_alg, key_fp.
 
-Fail-open: if the gateway is unreachable, the local PoW chain remains
+Fail-open (default): if the gateway is unreachable, the local PoW chain remains
 authoritative and the anchor row is marked 'pending' (retryable). A
 `DemoAnchor` provider records the exact same payload to a local shadow file
 so verification is truthful even with no Fabric node running (e.g. a laptop
 demo); its status is reported as 'demo', never 'anchored'.
+
+Mandatory (fail-closed): set `BLOCKCHAIN_ANCHOR_REQUIRED=true` to mandate the
+NBF/Fabric anchor. `anchor_block` then raises `BlockAnchorError` on any
+provider/gateway failure instead of downgrading to a 'pending' row, the
+`DemoAnchor` provider is rejected, and the ledger only commits a block whose
+on-chain anchor has *already* succeeded. This is the audited posture for
+I4C / judiciary report hand-off.
 """
 
 import base64
@@ -32,7 +39,7 @@ import logging
 import os
 import secrets
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -43,6 +50,18 @@ logger = logging.getLogger(__name__)
 
 # An empty CID marker used when IPFS is unavailable. Genuine CIDs are 46 chars.
 CID_PENDING = "CidPending-" + "0" * 36
+
+
+class BlockAnchorError(RuntimeError):
+    """Raised in mandatory mode when a report's external anchor does not fully
+    succeed on-chain (gateway down, provider failure, or demo-only provider).
+    A caller that catches this must treat the report as NOT blockchain-anchored
+    and refuse to hand it off as such."""
+
+    def __init__(self, message: str, *, provider: str = "i4c", status: str = "failed"):
+        super().__init__(message)
+        self.provider = provider
+        self.anchor_status = status
 
 
 # ── Org key custody ────────────────────────────────────────────────────────
@@ -289,12 +308,30 @@ def get_provider() -> AnchorProvider:
     return DemoAnchor()
 
 
-def anchor_block(block: Dict[str, Any]) -> Dict[str, Any]:
+def anchor_block(block: Dict[str, Any], strict: Optional[bool] = None) -> Dict[str, Any]:
     """
-    Commit an already-mined local block to the external ledger. Fail-open:
-    any provider/gateway error downgrades to 'pending' and is persisted.
+    Commit an already-mined local block to the external ledger.
+
+    Default (fail-open): any provider/gateway error downgrades to 'pending'
+    and is persisted.
+
+    Strict = settings.blockchain_anchor_required (or the explicit arg): the
+    anchor is MANDATED. A demo-only provider or any provider failure raises
+    `BlockAnchorError` and nothing (not even a 'pending' row) is written, so
+    the caller can refuse to commit the block to the local ledger.
     """
     provider = get_provider()
+    required = settings.blockchain_anchor_required if strict is None else bool(strict)
+
+    if required and provider.name == "demo":
+        raise BlockAnchorError(
+            "NBF/Fabric external anchor is REQUIRED but the demo provider is "
+            "active (BLOCKCHAIN_EXTERNAL_ANCHOR=false). Set "
+            "BLOCKCHAIN_EXTERNAL_ANCHOR=true and configure NBF_GATEWAY_URL.",
+            provider="demo",
+            status="demo_only",
+        )
+
     status = "pending"
     error = None
     try:
@@ -323,9 +360,23 @@ def anchor_block(block: Dict[str, Any]) -> Dict[str, Any]:
             tx_id=result.get("tx_id"),
             error=None,
         )
+        if required and status != "anchored":
+            raise BlockAnchorError(
+                f"External anchor did not reach 'anchored' (status={status!r}).",
+                provider=provider.name,
+                status=status,
+            )
         return {**result, "anchor_status": status, "error": None}
-    except Exception as e:  # fail-open; local chain is authoritative
+    except BlockAnchorError:
+        raise
+    except Exception as e:  # fail-open (default); fail-closed when mandated
         error = f"{type(e).__name__}: {e}"
+        if required:
+            raise BlockAnchorError(
+                f"NBF/Fabric external anchor FAILED (mandatory): {error}",
+                provider=provider.name,
+                status="failed",
+            ) from e
         logger.warning(f"External anchor #{block['block_index']} failed (fail-open): {error}")
         store.upsert_block_anchor(
             block_index=block["block_index"],
@@ -549,6 +600,11 @@ def verify_anchor(
             problems.append("demo anchor (NBF-Fabric offline) — no real on-chain record to compare")
         else:
             problems.append(f"external anchor {anchor_status} — nothing on-chain to verify")
+        if settings.blockchain_anchor_required:
+            problems.append(
+                "external anchor is MANDATORY (BLOCKCHAIN_ANCHOR_REQUIRED) and "
+                f"this call is {anchor_status} — report is not blockchain-anchored"
+            )
         return result
 
     # Pre-flight: fast health probe on the gateway so a dead / unwired forward

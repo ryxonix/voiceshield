@@ -52,7 +52,7 @@ Incident log  ─▶  I4C-ready forensic PDF
 |---|---|
 | Detection | Dhwani (multilingual Indian deepfake model) + AASIST-L official ensemble, INT8 ONNX inference on CPU |
 | Explainability | Jitter %, Shimmer %, Phase Continuity, Pitch Stability, noise-floor dropouts |
-| Real-time | Live call analysis over WebSocket, 3 s windows / 1 s hop (300 ms/100 ms fallback) |
+| Real-time | Live call analysis over WebSocket, 3 s windows / 1 s hop (300 ms/100 ms fallback). A **latency profile** governs the live hot loop: `latency_profile=realtime` (default) scores each window with the trained AASIST-L official + XAI prosody (`VOICESHIELD_LATENCY_BUDGET_MS`-gated, measured ~1.5-1.6 s/window on reference CPU); `latency_profile=ensemble` runs the full Dhwani ensemble live (seconds/window) |
 | Risk | Role-aware thresholds — Adult ≥ 0.85 critical, Child ≥ 0.70 critical (`ADULT_THRESHOLD` / `CHILD_THRESHOLD` in `.env`) |
 | Alerting | Telegram, Gmail SMTP, ntfy.sh, Fast2SMS, webhook — all optional |
 | Escalation | **Suspected** fraud → optional DoT conduct hand-off (Sanchar Saathi / Chakshu / DIP) via `CHAKSHU_DIP_WEBHOOK_URL`; **confirmed** fraud → I4C/1930 flow in the forensic PDF |
@@ -63,7 +63,7 @@ Incident log  ─▶  I4C-ready forensic PDF
 | Child Shield | Lower threshold, auto-mute, protective overlay |
 | Forensics | I4C-ready PDF reports (IST timestamps, legal next steps) |
 | Integrity | SHA-256 + Merkle-root anchored to a PoW blockchain ledger |
-| NBF anchor | Every block also cryptographically anchored on a **MeitY National Blockchain Framework (Hyperledger Fabric)** ledger with IPFS-pinned AES-256-GCM ciphertext — local PoW chain stays authoritative, external anchor fails-open to 'pending' if the Fabric network is offline |
+| NBF anchor | **MANDATORY (fail-closed).** Every block is ALSO cryptographically anchored on a **MeitY National Blockchain Framework (Hyperledger Fabric)** ledger with IPFS-pinned AES-256-GCM ciphertext. A forensic report is committed to the local ledger only **after** a real on-chain anchor succeeded (`BLOCKCHAIN_EXTERNAL_ANCHOR=true` + `BLOCKCHAIN_ANCHOR_REQUIRED=true` by default). Any gateway/provider failure raises `BlockAnchorError` and the report is refused — no unvalidated `demo`/`pending` report can be handed off as anchored. Explicitly disabling both flags restores the offline DemoAnchor shadow for laptop demos only |
 | Speaker ID | Enrollment + cross-session voice-print consistency (one-way, DPDP-safe) |
 | Privacy | Ephemeral RAM processing, zero disk for raw audio, scalar-only telemetry |
 | i18n | Dashboard UI in English / हिन्दी / ಕನ್ನಡ (context-aware translations) |
@@ -115,7 +115,7 @@ The `.env` has clearly-marked sections. Here is exactly what goes where:
 **Blockchain API keys** → the same file, section `⛓ BLOCKCHAIN REPORT LEDGER`:
 - The report ledger is **local and needs NO external key** (`BLOCKCHAIN_DIFFICULTY` is just the PoW difficulty, default 4).
 - `BLOCKCHAIN_RPC_URL`, `BLOCKCHAIN_EXPLORER_API_KEY`, `BLOCKCHAIN_ANCHOR_ADDRESS` are **optional** anchors if you later pin block hashes to a public chain.
-- **NBF-Lite external anchor** (opt-in, default OFF): `BLOCKCHAIN_EXTERNAL_ANCHOR=false` (default) uses a local `DemoAnchor` shadow so integrity verification works offline (status `demo`, never `anchored`). Set `BLOCKCHAIN_EXTERNAL_ANCHOR=true` + `NBF_GATEWAY_URL=http://<host>:4000` to push real Hyperledger Fabric + IPFS anchors through the gateway in [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — see the [NBF anchor section](#-nbf-anchor-network-meity-vishvasya). If the gateway is unreachable anchors are marked `pending` and stay retryable via `POST /api/blockchain/retry/{call_id}` (fail-open).
+- **NBF-Lite external anchor — MANDATORY by default** (fail-closed): `BLOCKCHAIN_EXTERNAL_ANCHOR=true` (default) selects the real Hyperledger Fabric + IPFS provider through the gateway in [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — see the [NBF anchor section](#-nbf-anchor-network-meity-vishvasya). `BLOCKCHAIN_ANCHOR_REQUIRED=true` (default) means a forensic report is only written to the local ledger **after** the on-chain anchor succeeded: any gateway/provider failure raises `BlockAnchorError` and the report endpoint refuses (503), and verification of an unanchored report reports it as NOT blockchain-anchored. Configure `NBF_GATEWAY_URL=http://<host>:4000` + the `NBF_*` settings. **Offline dev/demo only** — set `BLOCKCHAIN_EXTERNAL_ANCHOR=false` **and** `BLOCKCHAIN_ANCHOR_REQUIRED=false` to use the local `DemoAnchor` shadow (status `demo`, never `anchored`) so the repo works on a laptop with no Fabric node.
 - Exactly one variable per line, restart the backend after editing.
 
 ### 3. Start the backend
@@ -288,15 +288,16 @@ python -m app.models.export_onnx checkpoints/best_model.pth
 
 ---
 
-## 📊 Latency budget (per window)
+## 📊 Latency budget (per window) — measured, two profiles
 
-| Stage | Budget |
-|---|---|
-| WebSocket ingest + ring buffer | ≤ 7 ms |
-| Prosodic feature extraction | ≤ 20 ms |
-| Model inference (INT8 CPU ONNX) | ≤ 35 ms |
-| Watermark + fusion + mitigation | ≤ 16 ms |
-| **Total** | **≤ 78 ms** |
+The hot loop is `app.engine.pipeline.analyze_window` — the exact callable the WebSocket live driver, the gRPC servicer, and `/api/analyze` run per window. It self-reports its `latency_ms`, and `tests/test_latency_gate.py` enforces the **real-time** budget fail-hard on the real hot loop (median of ≥20 post-warmup runs; `VOICESHIELD_LATENCY_BUDGET_MS` is the only way to raise it, and it is printed when used).
+
+| Profile | Models per window | Measured (3 s window, reference CPU) | Gate |
+|---|---|---|---|
+| **realtime** *(default)* | trained AASIST-L official + XAI prosody (legacy ONNX only as last resort) | XAI ~0.77 s, model ~0.78 s → **total ~1.5-1.6 s median** | `latency_budget_ms=2000` (default) fail-hard |
+| **ensemble** *(opt-in streaming; always for `/api/analyze` + gRPC Analyze)* | Dhwani + AASIST-L official (+ XLS-R in file analyze) | Dhwani ~1.9 s, ensemble ~4.1 s, +XLS-R ~5.7 s (cold load ~72 s) | No streaming contract — bounded batch, sized by the SDK RPC timeout (default 120 s) |
+
+The original README table (ingest ≤7 / prosody ≤20 / model ≤35 / fusion ≤16 = **≤78 ms total**) was retired because it is physically unreachable on CPU: `librosa.pyin`-based prosody alone measures ~0.77 s and the trained AASIST-L official ~0.78 s. This section now documents the real numbers instead of a fabricated budget. Windows are 3 s / 1 s hop by default (300 ms / 100 ms fallback when no 3 s model is present). `latency_profile` is set in `backend/.env` (`LATENCY_PROFILE`) or `VOICESHIELD_`-prefixed env; the forensic `/api/analyze` surface always uses the full ensemble regardless of profile.
 
 ---
 
@@ -313,7 +314,7 @@ Local PoW block ──▶ NBF gateway ──▶ Fabric chaincode AnchorReport
 ```
 
 - **Private by design**: only hashes / CID / key fingerprint go on the ledger; the raw PDF stays encrypted under an operator-held master key (`reports/keys/org_master.key`). Ciphertext is pinned to IPFS so the full record is recoverable and tamper-evident without exposing voice content.
-- **Fail-open**: if the Fabric network is offline the local PoW chain remains authoritative and the anchor row is marked `pending` (retryable via `POST /api/blockchain/retry/{call_id}`). The `DemoAnchor` provider records the same payload locally so offline demos are truthful (`demo`, never `anchored`).
+- **Fail-closed (MANDATORY by default)**: `BLOCKCHAIN_EXTERNAL_ANCHOR=true` + `BLOCKCHAIN_ANCHOR_REQUIRED=true` mean a forensic report is committed to the local PoW ledger **only after** the on-chain anchor succeeded. If the Fabric network / gateway is unreachable, `anchor_report` raises `BlockAnchorError`, the report endpoints return 503 ("not blockchain-anchored"), the block is NOT inserted, and `verify_report` reports the call as not anchored. No unanchored evidence can be handed off as forensic. The `DemoAnchor` shadow and 'pending'/retryable degrade are available **only** when the operator explicitly disables both flags for offline dev/demo (`BLOCKCHAIN_EXTERNAL_ANCHOR=false` + `BLOCKCHAIN_ANCHOR_REQUIRED=false`); even then the demo status is reported truthfully (`demo`, never `anchored`). Production I4C / judiciary hand-off runs with the mandatory posture on.
 - **Deploy** (free tier): see [`deploy/nbf-fabric/`](deploy/nbf-fabric/) — `docker compose up -d` on Oracle Cloud **ARM A1 free tier** (IPFS + Fabric 2.2 peer/orderer (cryptogen identities, no CA) + trimmed `nbf-samplerest` gateway + `voiceshield-report.go` chaincode) or **WSL2 Ubuntu** on a laptop. Zero cloud spend either way.
 - **Ministry alignment**: MeitY's National Blockchain Framework (Vishvasya, CDAC/MeitY) is the same substrate NBF-Lite kits teach; anchors at NIC DCs (Bhubaneswar/Pune/Hyderabad) have already authenticated 34 Cr+ documents, and the same framework is being used for telecom blockchain (SMS/Spam enforcement across 1.13 L entities with RBI/SEBI/NIC/C-DAC).
 - **Live-verified**: anchored end-to-end on 2026-09-19 (Fabric `AnchorReport` `tx-id tx-test-1`, IPFS CID `QmZimdoSUNhXCrt…48kBa`, `GET /api/blockchain/onchain/e2e-NBF-LIVE-01` → `verified:true`, chain `VoiceShieldAIV1` height 14, 78 tests passing) — see [`docs/nbf-live-demo.md`](docs/nbf-live-demo.md).

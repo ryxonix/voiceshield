@@ -131,5 +131,7 @@ backend is up.
 - Ubuntu + Docker come with the Codespace — no install/admin.
 - Same NBF-compatible Fabric stack; backend parsing already tolerant
   (`NBF_IPFS_MODE=auto`, camelCase/txid handling).
-- Nothing about the anchor design changes; the local PoW chain stays
-  authoritative and fail-open throughout.
+- Nothing about the anchor design changes; with the production defaults in
+  place (`BLOCKCHAIN_ANCHOR_REQUIRED=true`), a report is anchored **only**
+  after the on-chain commit succeeds — a Codespace that is off makes anchoring
+  fail hard (503) rather than silently degrade.

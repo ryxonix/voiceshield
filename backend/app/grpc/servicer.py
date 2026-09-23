@@ -112,7 +112,9 @@ def _windowed(audio_f32: np.ndarray, role: str = "adult", max_windows: int = 300
     windows = []
     peak = 0.0
     for idx, frame in enumerate(frames):
-        ev = analyze_window(frame, role=role, include_xlsr=include_xlsr)
+        # Forensic gRPC Analyze path always uses the full ensemble (parity
+        # with REST /api/analyze); the real-time profile is for streaming only.
+        ev = analyze_window(frame, role=role, include_xlsr=include_xlsr, realtime=False)
         score = float(ev["synthetic_score"])
         peak = max(peak, score)
         windows.append(
@@ -198,9 +200,15 @@ class VoiceShield(VoiceShieldServicer):
                 "origin": request.origin or "",
                 "txn_value": request.txn_value or 0.0,
                 "txn_category": request.txn_category or "",
-                # proto3 bool has no presence: True => explicit override,
-                # False/default => unset => auto-check (matches REST "" form).
-                "known_contact": True if request.known_contact else None,
+                # `optional bool known_contact` gives real proto3 presence so a
+                # caller can express all three states exactly like REST's
+                # "" / "true" / "false": unset => auto-check, True => known,
+                # False => explicitly NOT-known.
+                "known_contact": (
+                    bool(request.known_contact)
+                    if request.HasField("known_contact")
+                    else None
+                ),
                 "prior_flags": request.prior_flags if request.prior_flags > 0 else None,
             }
         )
@@ -342,7 +350,7 @@ class VoiceShield(VoiceShieldServicer):
 
     def RetryAnchor(self, request: RetryAnchorRequest, context) -> RetryAnchorResponse:
         from app import store
-        from app.blockchain.external_anchor import retry_anchor
+        from app.blockchain.external_anchor import retry_anchor, BlockAnchorError
 
         block = store.get_block_by_call(request.call_id)
         if block is None:
@@ -350,7 +358,15 @@ class VoiceShield(VoiceShieldServicer):
             context.set_details(f"No block for call '{request.call_id}'. Generate a report first.")
             return RetryAnchorResponse(result={})
 
-        result = retry_anchor(block) or {}
+        try:
+            result = retry_anchor(block) or {}
+        except BlockAnchorError as e:
+            # Mandatory mode (BLOCKCHAIN_ANCHOR_REQUIRED=true): the anchor did
+            # not succeed on-chain — surface it as 503 UNAVAILABLE, never as a
+            # successful retry, so clients cannot hand off unanchored evidence.
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            context.set_details(f"Anchor retry failed — still not blockchain-anchored: {e}")
+            return RetryAnchorResponse(result={})
         return RetryAnchorResponse(result={str(k): str(v) for k, v in result.items()})
 
     # â”€â”€ Speaker enrollment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ ï¿½â”€

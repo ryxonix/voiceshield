@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS blocks (
     prev_hash    TEXT NOT NULL,
     nonce        INTEGER NOT NULL DEFAULT 0,
     block_hash   TEXT NOT NULL UNIQUE,
+    difficulty   INTEGER,
     created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_call ON blocks(call_id);
@@ -149,6 +150,7 @@ def init_db() -> None:
         _ensure_column(conn, "sessions", "context_json", "context_json TEXT NOT NULL DEFAULT '{}'")
         _ensure_column(conn, "incidents", "base_score", "base_score REAL NOT NULL DEFAULT 0.0")
         _ensure_column(conn, "incidents", "context_json", "context_json TEXT NOT NULL DEFAULT '{}'")
+        _ensure_column(conn, "blocks", "difficulty", "difficulty INTEGER")
         conn.commit()
         logger.info(f"Storage initialized: {_DB_PATH}")
     finally:
@@ -485,11 +487,12 @@ def insert_block(
     prev_hash: str,
     nonce: int,
     block_hash: str,
+    difficulty: Optional[int] = None,
 ) -> None:
     _execute(
         "INSERT INTO blocks (block_index, timestamp, report_id, call_id, incident_id, "
-        "file_path, file_sha256, merkle_root, prev_hash, nonce, block_hash, created_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,datetime('now'))",
+        "file_path, file_sha256, merkle_root, prev_hash, nonce, block_hash, difficulty, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))",
         (
             int(block_index),
             timestamp,
@@ -502,6 +505,7 @@ def insert_block(
             prev_hash,
             int(nonce),
             block_hash,
+            int(difficulty) if difficulty is not None else None,
         ),
     )
 

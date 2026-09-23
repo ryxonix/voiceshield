@@ -189,7 +189,7 @@ class _BaseGrpcClient:
         self,
         channel: Optional[grpc.Channel] = None,
         target: str = "127.0.0.1:50051",
-        timeout: float = 15.0,
+        timeout: float = 120.0,
     ) -> None:
         if channel is not None:
             self._channel = channel
@@ -217,7 +217,7 @@ class VoiceShieldGrpcClient(_BaseGrpcClient):
         self,
         channel: Optional[grpc.Channel] = None,
         target: str = "127.0.0.1:50051",
-        timeout: float = 15.0,
+        timeout: float = 120.0,
     ) -> None:
         super().__init__(channel=channel, target=target, timeout=timeout)
         self._stub = VoiceShieldStub(self._channel)
@@ -253,19 +253,21 @@ class VoiceShieldGrpcClient(_BaseGrpcClient):
         if not pcm:
             raise ValueError("analyze(): provide audio_path or audio_bytes")
         ctx = context or {}
-        resp = self._stub.Analyze(
-            AnalyzeRequest(
-                audio=pcm,
-                role=role,
-                caller=str(ctx.get("caller") or ""),
-                origin=str(ctx.get("origin") or ""),
-                txn_value=float(ctx.get("txn_value") or 0.0),
-                txn_category=str(ctx.get("txn_category") or ""),
-                known_contact=bool(ctx.get("known_contact")),
-                prior_flags=int(ctx.get("prior_flags") or 0),
-            ),
-            timeout=self._timeout,
+        _req = AnalyzeRequest(
+            audio=pcm,
+            role=role,
+            caller=str(ctx.get("caller") or ""),
+            origin=str(ctx.get("origin") or ""),
+            txn_value=float(ctx.get("txn_value") or 0.0),
+            txn_category=str(ctx.get("txn_category") or ""),
+            prior_flags=int(ctx.get("prior_flags") or 0),
         )
+        # `optional bool known_contact` keeps the three REST states on the wire:
+        # only set it when the caller supplied a value (None => leave unset =>
+        # the servicer auto-checks the contact list).
+        if ctx.get("known_contact") is not None:
+            _req.known_contact = bool(ctx["known_contact"])
+        resp = self._stub.Analyze(_req, timeout=self._timeout)
         return _GrpcShapes.analyze(resp)
 
     # -- Incidents ---------------------------------------------------
@@ -328,7 +330,7 @@ class VoiceShieldGrpcAioClient(_BaseGrpcClient):
         self,
         channel: Optional[grpc.aio.Channel] = None,
         target: str = "127.0.0.1:50051",
-        timeout: float = 15.0,
+        timeout: float = 120.0,
     ) -> None:
         if channel is None:
             channel = grpc.aio.insecure_channel(target)
@@ -374,19 +376,18 @@ class VoiceShieldGrpcAioClient(_BaseGrpcClient):
         if not pcm:
             raise ValueError("analyze(): provide audio_path or audio_bytes")
         ctx = context or {}
-        resp = await self._stub.Analyze(
-            AnalyzeRequest(
-                audio=pcm,
-                role=role,
-                caller=str(ctx.get("caller") or ""),
-                origin=str(ctx.get("origin") or ""),
-                txn_value=float(ctx.get("txn_value") or 0.0),
-                txn_category=str(ctx.get("txn_category") or ""),
-                known_contact=bool(ctx.get("known_contact")),
-                prior_flags=int(ctx.get("prior_flags") or 0),
-            ),
-            timeout=self._timeout,
+        _req = AnalyzeRequest(
+            audio=pcm,
+            role=role,
+            caller=str(ctx.get("caller") or ""),
+            origin=str(ctx.get("origin") or ""),
+            txn_value=float(ctx.get("txn_value") or 0.0),
+            txn_category=str(ctx.get("txn_category") or ""),
+            prior_flags=int(ctx.get("prior_flags") or 0),
         )
+        if ctx.get("known_contact") is not None:
+            _req.known_contact = bool(ctx["known_contact"])
+        resp = await self._stub.Analyze(_req, timeout=self._timeout)
         return _GrpcShapes.analyze(resp)
 
     async def workflows(self) -> dict:

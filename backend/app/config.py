@@ -34,7 +34,17 @@ class Settings(BaseSettings):
     sample_rate: int = 16000
     window_samples: int = 4800       # 300 ms @ 16 kHz
     hop_samples: int = 1600          # 100 ms hop → 66% overlap
-    latency_budget_ms: float = 78.0  # Max per-window latency
+    # Latency profile (single hot loop, two budgets — see about project.txt §8):
+    #   "realtime" (DEFAULT) -> live streaming / gate path scores each window
+    #       with the trained AASIST-L official detector + XAI prosody only.
+    #       Budget enforced fail-hard by tests/test_latency_gate.py.
+    #   "ensemble" -> live windows run the full multi-model ensemble
+    #       (Dhwani + AASIST-L official [+ XLS-R]); per-window latency is
+    #       seconds-scale by design. The forensic /api/analyze + gRPC Analyze
+    #       surfaces ALWAYS use the ensemble regardless of this profile.
+    latency_profile: str = "realtime"
+    latency_budget_ms: float = 2000.0  # real-time per-window budget (measured
+                                       # ~1.5-1.6 s median on the reference CPU)
     silence_rms_threshold: float = 0.012  # window RMS below this = no speech → bonafide
     min_speech_fraction: float = 0.25     # min share of 100 ms frames w/ speech → else bonafide
 
@@ -80,20 +90,28 @@ class Settings(BaseSettings):
 
     # ── Blockchain Ledger ──────────────────────────────────────────────
     # The report ledger is a local proof-of-work hash chain — NO external
-    # API key is required to run it. The fields below are OPTIONAL anchors
-    # if you later want to pin a block hash to a public chain (e.g. for the
-    # I4C / judiciary hand-off path).
+    # API key is required to run it. The NBF/Fabric external anchor below is
+    # MANDATORY by default (fail-closed): a forensic report is committed to
+    # the local ledger only AFTER a real on-chain anchor succeeded.
     blockchain_difficulty: int = 4   # PoW leading-zero requirement
     blockchain_rpc_url: str = ""     # optional public-chain RPC anchor
     blockchain_explorer_api_key: str = ""  # optional explorer API key
     blockchain_anchor_address: str = ""    # optional on-chain anchor addr
-    # NBF-Lite / MeitY National Blockchain Framework external anchor (optional).
-    # When blockchain_external_anchor=True, every locally-minied report block is
-    # additionally committed to a Hyperledger Fabric ledger (via a REST gateway)
-    # and its encrypted PDF pushed to IPFS. Fail-open: if the gateway is
-    # unreachable the local PoW chain remains authoritative and the anchor is
-    # marked 'pending' (retryable).
-    blockchain_external_anchor: bool = False
+    # NBF-Lite / MeitY National Blockchain Framework external anchor.
+    # When True, every locally-mined report block is additionally committed
+    # to a Hyperledger Fabric ledger (via a REST gateway) and its encrypted
+    # PDF pushed to IPFS. Default True (mandatory posture, see below).
+    blockchain_external_anchor: bool = True
+    # MANDATE the NBF/Fabric anchor (fail-closed). When True, a forensic report
+    # is only committed to the local ledger AFTER a real on-chain anchor
+    # succeeded: any gateway/provider failure raises BlockAnchorError and the
+    # report endpoints refuse (503) instead of writing an unanchored block, the
+    # DemoAnchor is rejected, and verification reports the call as NOT
+    # blockchain-anchored. Production / operator hand-off runs with this on.
+    # OFFLINE DEV / DEMO ONLY: set BLOCKCHAIN_EXTERNAL_ANCHOR=false AND
+    # BLOCKCHAIN_ANCHOR_REQUIRED=false to fall back to the local DemoAnchor
+    # shadow (status 'demo', never 'anchored') with no Fabric node needed.
+    blockchain_anchor_required: bool = True
     nbf_gateway_url: str = ""          # e.g. http://<fabric-gateway-host>:4000
     nbf_channel: str = "mychannel"
     nbf_cc: str = "voiceshield-report"

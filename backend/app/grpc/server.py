@@ -39,6 +39,11 @@ def create_server(
     :param host: bind host (default `settings.grpc_host` = 0.0.0.0)
     Returns an unstarted server; callers decide whether to `.start()` it
     directly or add it as a real-server TLS/intercept layer.
+
+    The server carries a ``_vs_bound`` int attribute set to the port actually
+    bound (0 when the requested port was already in use / could not be bound)
+    so an app lifecycle can start it only when the bind succeeded and fail
+    gracefully otherwise.
     """
     from app.config import settings
     from app.grpc.servicer import register
@@ -56,8 +61,18 @@ def create_server(
         ],
     )
     register(server)
-    server.add_insecure_port(f"{host}:{port}")
-    logger.info(f"gRPC server prepared: listening on {host}:{port}")
+    try:
+        server._vs_bound = server.add_insecure_port(f"{host}:{port}")
+    except Exception as e:  # pragma: no cover - bind errors are platform quirks
+        logger.warning(f"gRPC bind to {host}:{port} failed: {e}")
+        server._vs_bound = 0
+    if not server._vs_bound:
+        logger.warning(
+            f"gRPC port {port} is already in use on {host} — the standalone "
+            f"VoiceShield gRPC listener will not be started here."
+        )
+    else:
+        logger.info(f"gRPC server prepared: listening on {host}:{port}")
     return server
 
 

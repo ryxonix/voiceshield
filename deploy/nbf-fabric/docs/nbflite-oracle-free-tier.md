@@ -143,8 +143,13 @@ ssh -i ~/.ssh/id_ed25519 -N -L 4000:localhost:4000 opc@<PUBLIC_IP>
    curl http://localhost:8000/api/blockchain                        # anchor summary
    ```
    The check queries `QueryReport`, pulls the IPFS ciphertext, decrypts it and
-   compares the SHA-256 + `%PDF` magic. It is **fail-open**: if the VM is off,
-   the anchor stays `pending` (retryable), never a false pass.
+   compares the SHA-256 + `%PDF` magic. With the mandatory posture on
+   (`BLOCKCHAIN_ANCHOR_REQUIRED=true`, the default), a call that is not really
+   anchored is reported truthfully (never a false pass); when the VM is off,
+   anchoring fails hard — the block is not inserted and the report endpoints
+   return 503 until the gateway is back. The `pending` (retryable) / `demo`
+   statuses only appear when the operator explicitly disables the mandatory
+   flags for offline dev/demo.
 
 ## 8. Official NBFLite swap later (optional)
 
@@ -174,4 +179,6 @@ tolerant of their envelopes — just point `NBF_CHANNEL`/`NBF_CC`/`NBF_USER`/
   also free from MeitY/C-DAC.
 - No paid domains, load balancers or API keys.
 - Stop/terminate the VM when not in use to keep the anchor honest: with the VM
-  off, anchors are `pending` (fail-open), not lost.
+  off in the default mandatory posture, anchoring fails hard (503) rather than
+  silently passing; with the mandatory flags off for dev/demo, anchors are
+  `pending` (retryable), not lost.

@@ -168,7 +168,14 @@ async def stream_endpoint(
                             logger.debug(f"Speaker check failed: {e}")
 
                 # ── Full detection pipeline ─────────────────────────
-                event = analyze_window(window, role=role, speaker_mismatch=mismatched)
+                # realtime=None -> follows settings.latency_profile (the
+                # live streaming path honors the profile; default "realtime").
+                event = analyze_window(
+                    window,
+                    role=role,
+                    speaker_mismatch=mismatched,
+                    realtime=None,
+                )
 
                 score = event["synthetic_score"]
                 watermark_hit = event["watermark_hit"]

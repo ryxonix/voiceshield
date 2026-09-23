@@ -27,8 +27,11 @@ message AnalyzeRequest {
   string origin = 4;          // telecom | voip | enterprise | unknown
   double txn_value = 5;       // INR
   string txn_category = 6;    // e.g. fund_transfer
-  bool known_contact = 7;     // explicit override (unset = auto-check)
-  int64 prior_flags = 8;      // explicit override (unset = auto-check)
+  // `optional` gives real proto3 field presence: unset => auto-check, True =>
+  // explicit known, False => explicit NOT-known (mirrors REST "" / "true" /
+  // "false"). A bare `bool` cannot carry the three states (False == unset).
+  optional bool known_contact = 7;
+  int64 prior_flags = 8;      // explicit override (0/unset = auto-check)
 }
 
 message AnalyzeResponse {

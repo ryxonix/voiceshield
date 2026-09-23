@@ -44,8 +44,8 @@ const hi: Record<string, string> = {
   'Start live session': 'लाइव सत्र शुरू करें',
 
   /* ── Dashboard: intro paragraphs ───────────────────────────────────── */
-  'Every 300 milliseconds, VoiceShield extracts a fresh window from the call stream and runs it through three independent checks: a graph-attention acoustic model (AASIST-L), sub-phonemic prosodic analysis — jitter, shimmer and spectral phase continuity — and a watermark verifier that recognizes authorized enterprise callers instantly.':
-    'हर 300 मिलीसेकंड पर VoiceShield कॉल स्ट्रीम से नई विंडो निकालकर उसे तीन स्वतंत्र जाँचों से गुज़ारता है: ग्राफ़-अटेंशन एकॉस्टिक मॉडल (AASIST-L), सब-फ़ोनीमिक प्रोज़ोडिक विश्लेषण — जिटर, शिमर और स्पेक्ट्रल फ़ेज़ निरंतरता — और वॉटरमार्क वेरिफ़ायर जो अधिकृत एंटरप्राइज़ कॉलर को तुरंत पहचान लेता है।',
+  'Every second, VoiceShield slides a fresh window across the call stream and runs it through three independent checks: a graph-attention acoustic model (AASIST-L), sub-phonemic prosodic analysis — jitter, shimmer and spectral phase continuity — and a watermark verifier that recognizes authorized enterprise callers instantly.':
+    'हर सेकंड VoiceShield कॉल स्ट्रीम पर नई विंडो सरकाकर उसे तीन स्वतंत्र जाँचों से गुज़ारता है: ग्राफ़-अटेंशन एकॉस्टिक मॉडल (AASIST-L), सब-फ़ोनीमिक प्रोज़ोडिक विश्लेषण — जिटर, शिमर और स्पेक्ट्रल फ़ेज़ निरंतरता — और वॉटरमार्क वेरिफ़ायर जो अधिकृत एंटरप्राइज़ कॉलर को तुरंत पहचान लेता है।',
   'The results are fused into a single synthetic score. Crossings trigger role-aware mitigation: 70% for calls involving children, 85% for adults, with alerts dispatched to Telegram, email, SMS and webhooks, and an I4C-ready forensic PDF generated for every incident.':
     'इन्हीं नतीजों को एक ही synthetic score में मिलाया जाता है। सीमा पार होते ही रोल-अवेयर उपाय लागू होते हैं: बच्चों वाली कॉल के लिए 70%, वयस्कों के लिए 85%। टेलीग्राम, ईमेल, एसएमएस और वेबहुक पर अलर्ट जाते हैं और हर घटना की I4C-रेडी फोरेंसिक PDF बनती है।',
 
@@ -53,7 +53,7 @@ const hi: Record<string, string> = {
   'Detection latency': 'डिटेक्शन विलंबता',
   'Window cadence': 'विंडो गति',
   Languages: 'भाषाएँ',
-  'per-window design budget, ONNX, 2 CPU threads': 'प्रति-विंडो डिज़ाइन बजट, ONNX, 2 CPU थ्रेड',
+  'realtime profile · per 3 s window · ONNX, 2 CPU threads · ≤ 2000 ms budget': 'रियलटाइम प्रोफ़ाइल · प्रति 3 s विंडो · ONNX, 2 CPU थ्रेड · ≤ 2000 ms बजट',
   'Dhwani window / hop · 300 ms / 100 ms legacy fallback': 'Dhwani विंडो / हॉप · 300 ms / 100 ms लेगेसी फ़ॉलबैक',
   'accent-invariant features': 'उच्चारण-स्वतंत्र विशेषताएँ',
 
@@ -265,8 +265,8 @@ const kn: Record<string, string> = {
   'Start live session': 'ಲೈವ್ ಸೆಷನ್ ಪ್ರಾರಂಭಿಸಿ',
 
   /* ── Dashboard: intro paragraphs ───────────────────────────────────── */
-  'Every 300 milliseconds, VoiceShield extracts a fresh window from the call stream and runs it through three independent checks: a graph-attention acoustic model (AASIST-L), sub-phonemic prosodic analysis — jitter, shimmer and spectral phase continuity — and a watermark verifier that recognizes authorized enterprise callers instantly.':
-    'ಪ್ರತಿ 300 ಮಿಲಿಸೆಕೆಂಡ್‌ಗೆ VoiceShield ಕರೆ ಸ್ಟ್ರೀಮ್‌ನಿಂದ ಹೊಸ ವಿಂಡೋ ತೆಗೆದು ಅದನ್ನು ಮೂರು ಸ್ವತಂತ್ರ ಪರೀಕ್ಷೆಗಳ ಮೂಲಕ ಸಾಗಿಸುತ್ತದೆ: ಗ್ರಾಫ್-ಅಟೆನ್ಶನ್ ಅಕೌಸ್ಟಿಕ್ ಮಾಡೆಲ್ (AASIST-L), ಸಬ್-ಫೋನೆಮಿಕ್ ಪ್ರಾಸೊಡಿಕ್ ವಿಶ್ಲೇಷಣೆ — ಜಿಟರ್, ಶಿಮರ್ ಮತ್ತು ಸ್ಪೆಕ್ಟ್ರಲ್ ಫೇಸ್ ನಿರಂತರತೆ — ಮತ್ತು ಮಾನ್ಯ ಎಂಟರ್ಪ್ರೈಸ್ ಕರೆದಾರರನ್ನು ತಕ್ಷಣ ಗುರುತಿಸುವ ವಾಟರ್ಮಾರ್ಕ್ ಪರಿಶೀಲಕ.',
+  'Every second, VoiceShield slides a fresh window across the call stream and runs it through three independent checks: a graph-attention acoustic model (AASIST-L), sub-phonemic prosodic analysis — jitter, shimmer and spectral phase continuity — and a watermark verifier that recognizes authorized enterprise callers instantly.':
+    'ಪ್ರತಿ ಸೆಕೆಂಡ್‌ಗೆ VoiceShield ಕರೆ ಸ್ಟ್ರೀಮ್‌ನಾದ್ಯಂತ ಹೊಸ ವಿಂಡೋ ಸರಿಸಿ ಅದನ್ನು ಮೂರು ಸ್ವತಂತ್ರ ಪರೀಕ್ಷೆಗಳ ಮೂಲಕ ಸಾಗಿಸುತ್ತದೆ: ಗ್ರಾಫ್-ಅಟೆನ್ಶನ್ ಅಕೌಸ್ಟಿಕ್ ಮಾಡೆಲ್ (AASIST-L), ಸಬ್-ಫೋನೆಮಿಕ್ ಪ್ರಾಸೊಡಿಕ್ ವಿಶ್ಲೇಷಣೆ — ಜಿಟರ್, ಶಿಮರ್ ಮತ್ತು ಸ್ಪೆಕ್ಟ್ರಲ್ ಫೇಸ್ ನಿರಂತರತೆ — ಮತ್ತು ಮಾನ್ಯ ಎಂಟರ್ಪ್ರೈಸ್ ಕರೆದಾರರನ್ನು ತಕ್ಷಣ ಗುರುತಿಸುವ ವಾಟರ್ಮಾರ್ಕ್ ಪರಿಶೀಲಕ.',
   'The results are fused into a single synthetic score. Crossings trigger role-aware mitigation: 70% for calls involving children, 85% for adults, with alerts dispatched to Telegram, email, SMS and webhooks, and an I4C-ready forensic PDF generated for every incident.':
     'ಈ ಫಲಿತಾಂಶಗಳನ್ನು ಒಂದೇ synthetic score ಆಗಿ ವಿಲೀನಗೊಳಿಸಲಾಗುತ್ತದೆ. ಮಿತಿ ದಾಟಿದರೆ ಪಾತ್ರ-ಆಧಾರಿತ ಕ್ರಮ ಜಾರಿಯಾಗುತ್ತದೆ: ಮಕ್ಕಳ ಕರೆಗಳಿಗೆ 70%, ವಯಸ್ಕರಿಗೆ 85%. ಟೆಲಿಗ್ರಾಮ್, ಇಮೇಲ್, SMS ಮತ್ತು ವೆಬ್‌ಹುಕ್‌ಗೆ ಎಚ್ಚರಿಕೆಗಳನ್ನು ಕಳುಹಿಸಲಾಗುತ್ತದೆ, ಮತ್ತು ಪ್ರತಿ ಘಟನೆಗೆ I4C-ಸಿದ್ಧ ಫೋರೆನ್ಸಿಕ್ PDF ರಚಿಸಲಾಗುತ್ತದೆ.',
 
@@ -274,7 +274,7 @@ const kn: Record<string, string> = {
   'Detection latency': 'ಪತ್ತೆ ವಿಳಂಬ',
   'Window cadence': 'ವಿಂಡೋ ವೇಗ',
   Languages: 'ಭಾಷೆಗಳು',
-  'per-window design budget, ONNX, 2 CPU threads': 'ಪ್ರತಿ-ವಿಂಡೋ ವಿನ್ಯಾಸ ಬಜೆಟ್, ONNX, 2 CPU ಥ್ರೆಡ್',
+  'realtime profile · per 3 s window · ONNX, 2 CPU threads · ≤ 2000 ms budget': 'ರಿಯಲ್‌ಟೈಮ್ ಪ್ರೊಫೈಲ್ · ಪ್ರತಿ 3 s ವಿಂಡೋ · ONNX, 2 CPU ಥ್ರೆಡ್ · ≤ 2000 ms ಬಜೆಟ್',
   'Dhwani window / hop · 300 ms / 100 ms legacy fallback': 'Dhwani ವಿಂಡೋ / ಹಾಪ್ · 300 ms / 100 ms ಲೆಗಸಿ ಫಾಲ್‌ಬ್ಯಾಕ್',
   'accent-invariant features': 'ಉಚ್ಚಾರ-ಸ್ವತಂತ್ರ ವೈಶಿಷ್ಟ್ಯಗಳು',
 
