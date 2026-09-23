@@ -20,7 +20,34 @@ type View =
 function AppInner() {
   const t = useT()
   const [view, setView] = useState<View>('dashboard')
-  const nav = (v: string) => setView(v as View)
+  const [sub, setSub] = useState<string>('solution')
+  const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  const PROJECT_SUBS = ['solution', 'approach', 'feasibility', 'impacts', 'references']
+
+  const nav = (v: string) => {
+    if (PROJECT_SUBS.includes(v)) {
+      setView('project')
+      setSub(v)
+      requestAnimationFrame(() => {
+        document.getElementById(v)?.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' })
+      })
+      return
+    }
+    if (v === 'project') {
+      setView('project')
+      setSub('solution')
+      window.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' })
+      return
+    }
+    setView(v as View)
+  }
+
+  const activeNav: string =
+    view === 'project'
+      ? sub
+      : view === 'reports' || view === 'blockchain' || view === 'analyze'
+        ? 'forensics'
+        : view
 
   const SECTIONS: NavSection[] = [
     {
@@ -39,11 +66,8 @@ function AppInner() {
     {
       id: 'forensics',
       label: t('Forensics'),
-      items: [
-        { id: 'reports', label: t('Session forensics') },
-        { id: 'blockchain', label: t('Blockchain ledger') },
-        { id: 'analyze', label: t('File analysis') },
-      ],
+      landing: 'reports',
+      items: [],
     },
     {
       id: 'identity',
@@ -51,9 +75,16 @@ function AppInner() {
       items: [{ id: 'speakers', label: t('Speaker enrollment') }],
     },
     {
-      id: 'about',
+      id: 'project',
       label: 'Project Working',
-      items: [{ id: 'project', label: 'Project Working' }],
+      landing: 'project',
+      items: [
+        { id: 'solution', label: 'Proposed solution' },
+        { id: 'approach', label: 'Technical approach' },
+        { id: 'feasibility', label: 'Feasibility & viability' },
+        { id: 'impacts', label: 'Impacts & benefits' },
+        { id: 'references', label: 'Research & references' },
+      ],
     },
   ]
 
@@ -61,16 +92,16 @@ function AppInner() {
     <div className="min-h-screen">
       <TopBar onNav={(id) => setView(id as View)} />
       <div className="mx-auto flex max-w-[1400px]">
-        <Sidebar sections={SECTIONS} active={view} onNavigate={nav} />
+        <Sidebar sections={SECTIONS} active={activeNav} onNavigate={nav} />
         <main className="min-w-0 flex-1 px-6 py-8 md:px-10 lg:px-12">
           <div className="mx-auto max-w-3xl">
             {view === 'dashboard' && <Dashboard onNavigate={nav} />}
             {view === 'live' && <Dashboard liveOnly onNavigate={nav} />}
             {view === 'incidents' && <Incidents />}
-            {view === 'reports' && <Reports initialTab="sessions" />}
-            {view === 'blockchain' && <Reports initialTab="blockchain" />}
-            {view === 'analyze' && <Reports initialTab="analyze" />}
-            {view === 'speakers' && <Reports initialTab="speakers" />}
+            {view === 'reports' && <Reports key="sessions" initialTab="sessions" />}
+            {view === 'blockchain' && <Reports key="blockchain" initialTab="blockchain" />}
+            {view === 'analyze' && <Reports key="analyze" initialTab="analyze" />}
+            {view === 'speakers' && <Reports key="speakers" initialTab="speakers" />}
             {view === 'project' && <ProjectWorking />}
           </div>
         </main>

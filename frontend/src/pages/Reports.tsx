@@ -8,7 +8,6 @@ type Tab = 'sessions' | 'blockchain' | 'analyze' | 'speakers'
 export default function Reports({ initialTab = 'sessions' }: { initialTab?: Tab }) {
   const t = useT()
   const [tab, setTab] = useState<Tab>(initialTab as Tab)
-  useEffect(() => setTab(initialTab as Tab), [initialTab])
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'sessions', label: t('Session forensics') },
@@ -54,6 +53,7 @@ export default function Reports({ initialTab = 'sessions' }: { initialTab?: Tab 
 function Sessions() {
   const { t, tVerdict } = useI18n()
   const [sessions, setSessions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
   const [windows, setWindows] = useState<any[]>([])
 
@@ -65,6 +65,7 @@ function Sessions() {
       })
       .then((xs) => setSessions(Array.isArray(xs) ? xs : []))
       .catch(() => setSessions([]))
+      .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
@@ -81,7 +82,10 @@ function Sessions() {
   return (
     <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
       <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
-        {sessions.length === 0 && (
+        {sessions.length === 0 && loading && (
+          <p className="text-[13.5px] text-zinc-500">{t('Loading sessions…')}</p>
+        )}
+        {sessions.length === 0 && !loading && (
           <p className="text-[13.5px] text-zinc-500">{t('No sessions recorded yet — run a live monitor session first.')}</p>
         )}
         {sessions.map((s) => (
@@ -489,7 +493,7 @@ function Metric({ label, value, capitalize }: { label: string; value: any; capit
   return (
     <div className="overflow-hidden rounded-lg bg-[#FAF8F5] px-4 py-3">
       <div className="truncate text-[10.5px] font-bold uppercase tracking-wide text-zinc-500" title={label}>{label}</div>
-      <div className={`mt-0.5 truncate font-serif text-[22px] font-bold tracking-tight text-zinc-900 ${capitalize ? 'capitalize' : ''}`}>
+      <div className={`mt-0.5 truncate font-serif text-[22px] font-bold tracking-tight tabular-nums text-zinc-900 ${capitalize ? 'capitalize' : ''}`}>
         {value}
       </div>
     </div>

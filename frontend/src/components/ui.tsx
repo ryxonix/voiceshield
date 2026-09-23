@@ -144,7 +144,7 @@ function SettingsMenu() {
 
 /* ------------------------------ Sidebar shell ------------------------------ */
 export type NavItem = { id: string; label: string; badge?: string }
-export type NavSection = { id: string; label: string; items: NavItem[] }
+export type NavSection = { id: string; label: string; items: NavItem[]; landing?: string }
 
 export function Sidebar({
   sections,
@@ -160,13 +160,16 @@ export function Sidebar({
   const [openSet, setOpenSet] = useState<Set<string>>(
     () => new Set(sections.filter((s) => s.items.some((i) => i.id === active)).map((s) => s.id)),
   )
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    const willOpen = !openSet.has(id)
     setOpenSet((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
+    return willOpen
+  }
 
   return (
     <aside className="sticky top-16 hidden h-[calc(100vh-4rem)] w-64 shrink-0 overflow-y-auto border-r border-[#E4E4E7] pb-10 pt-6 lg:block">
@@ -177,8 +180,13 @@ export function Sidebar({
           return (
             <div key={s.id} className="mb-1">
               <button
-                onClick={() => toggle(s.id)}
-                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13.5px] font-bold text-zinc-900 transition-colors hover:bg-[#F1EEE9]"
+                onClick={() => {
+                  if (toggle(s.id) && s.landing) onNavigate(s.landing)
+                }}
+                aria-expanded={open}
+                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13.5px] font-bold text-zinc-900 transition-colors hover:bg-[#F1EEE9] ${
+                  active === s.id ? 'bg-[#F1EEE9]' : ''
+                }`}
               >
                 <span>{s.label}</span>
                 <span className="text-zinc-400">
@@ -193,6 +201,7 @@ export function Sidebar({
                       <button
                         key={i.id}
                         onClick={() => onNavigate(i.id)}
+                        aria-current={isActive ? 'page' : undefined}
                         className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-[13.5px] transition-colors ${
                           isActive
                             ? 'bg-white font-semibold text-zinc-900 shadow-sm shadow-zinc-900/5 ring-1 ring-[#E4E4E7]'

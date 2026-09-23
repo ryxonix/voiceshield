@@ -6,6 +6,7 @@ export function SessionCard({ s, onClick, active }: { s: any; onClick?: () => vo
   const band =
     s.max_score >= 0.85 ? 'critical' : s.max_score >= 0.68 ? 'high' : s.max_score >= 0.35 ? 'medium' : 'low'
   const color = bandColor(band)
+  const bandLabel = t(`sev.${band}`)
   return (
     <button
       onClick={onClick}
@@ -14,8 +15,13 @@ export function SessionCard({ s, onClick, active }: { s: any; onClick?: () => vo
     >
       <div className="flex items-center justify-between">
         <span className="font-mono text-[12.5px] text-zinc-800">{s.call_id}</span>
-        <span className="text-[14px] font-bold" style={{ color }}>
-          {(s.max_score * 100).toFixed(0)}%
+        <span className="flex flex-col items-end leading-tight">
+          <span className="text-[14px] font-bold" style={{ color }}>
+            {(s.max_score * 100).toFixed(0)}%
+          </span>
+          <span className="text-[9.5px] font-bold uppercase tracking-wide" style={{ color }}>
+            {bandLabel}
+          </span>
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11.5px] text-zinc-500">

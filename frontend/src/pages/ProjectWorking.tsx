@@ -33,7 +33,7 @@ export default function ProjectWorking() {
         meta="How VoiceShield AI works — the proposed solution, technical approach, feasibility, impacts, and the research sources behind it."
       />
 
-      <div className="sticky top-20 z-20 mt-6 flex gap-2 overflow-x-auto rounded-xl bg-[#FAF8F5]/95 pb-1 pt-0.5 backdrop-blur">
+      <div className="sticky top-20 z-20 mt-6 flex gap-2 overflow-x-auto rounded-xl bg-[#FAF8F5]/95 pb-1 pt-0.5 backdrop-blur lg:hidden">
         {ANCHORS.map(([id, label]) => (
           <a
             key={id}
@@ -261,7 +261,7 @@ export default function ProjectWorking() {
 
 function Section({ id, n, title, lead, children }: { id: string; n: string; title: string; lead: string; children: ReactNode }) {
   return (
-    <section id={id} className="scroll-mt-28">
+    <section id={id} className="scroll-mt-36">
       <div className="flex items-baseline gap-3">
         <span className="font-mono text-[12px] font-bold text-[#2563EB]">{n}</span>
         <h2 className="font-serif text-[26px] font-bold tracking-tight text-zinc-900">{title}</h2>
@@ -382,7 +382,7 @@ function StatCard({ label, value, note }: { label: string; value: string; note: 
   return (
     <div className="card p-5">
       <div className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="mt-1 font-serif text-[26px] font-bold tracking-tight text-zinc-900">{value}</div>
+      <div className="mt-1 font-serif text-[26px] font-bold tracking-tight tabular-nums text-zinc-900">{value}</div>
       <div className="mt-0.5 text-[12.5px] text-zinc-500">{note}</div>
     </div>
   )

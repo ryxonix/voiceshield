@@ -379,7 +379,7 @@ function StatCard({ label, value, note }: { label: string; value: string; note: 
   return (
     <div className="card p-5">
       <div className="text-[11px] font-bold uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="mt-1 font-serif text-[26px] font-bold tracking-tight text-zinc-900">{value}</div>
+      <div className="mt-1 font-serif text-[26px] font-bold tracking-tight tabular-nums text-zinc-900">{value}</div>
       <div className="mt-0.5 text-[12.5px] text-zinc-500">{note}</div>
     </div>
   )
