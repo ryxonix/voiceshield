@@ -35,7 +35,12 @@ vm:
   endpoint: ""
 
 chaincode:
-  builder: docker
+  mode: net
+  system:
+    _lifecycle: enable
+    cscc: enable
+    lscc: enable
+    qscc: enable
   externalBuilders:
     - name: ccaas
       path: /opt/hyperledger/ccaas_builder
