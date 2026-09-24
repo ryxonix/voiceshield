@@ -21,7 +21,7 @@ async function buildCore({ user, channel, ccname, cfgpath, local, mspId, fcn, ar
 
   const gw = new Gateway();
   const asLocalhost = process.env.AS_LOCALHOST !== 'false';
-  await gw.connect(ccp, { wallet, identity: identityLabel, discovery: { enabled: true, asLocalhost } });
+  await gw.connect(ccp, { wallet, identity: identityLabel, discovery: { enabled: false, asLocalhost } });
   const network = await gw.getNetwork(channel || 'mychannel');
   const contract = network.getContract(ccname || 'fabcar');
   return { gw, contract };
