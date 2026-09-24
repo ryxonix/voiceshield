@@ -68,10 +68,11 @@ RUN set -eux; \
     cp "${D}/peer" "${D}/orderer" "${D}/cryptogen" "${D}/configtxgen" /usr/local/bin/; \
     rm -rf /tmp/fabric-release /tmp/fabric.tgz
 
-# Kubo IPFS binaries
+# Kubo IPFS binaries (GitHub Releases URL is reliable; dist.ipfs.tech gateway
+# intermittently 404s in CI, which broke curl -fSL).
 RUN set -eux; \
     ARCH="${TARGETARCH:-amd64}"; \
-    curl -fsSL "https://dist.ipfs.tech/kubo/v${KUBO_VERSION}/kubo_${KUBO_VERSION}_linux-${ARCH}.tar.gz" -o /tmp/kubo.tgz; \
+    curl -fSL "https://github.com/ipfs/kubo/releases/download/v${KUBO_VERSION}/kubo_${KUBO_VERSION}_linux-${ARCH}.tar.gz" -o /tmp/kubo.tgz; \
     tar -xzf /tmp/kubo.tgz -C /tmp; \
     mv /tmp/kubo/ipfs /usr/local/bin/ipfs; \
     rm -rf /tmp/kubo /tmp/kubo.tgz
