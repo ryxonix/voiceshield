@@ -78,11 +78,6 @@ RUN set -eux; \
     cp "${D}/peer" "${D}/orderer" "${D}/cryptogen" "${D}/configtxgen" /usr/local/bin/; \
     rm -rf /tmp/fabric-release /tmp/fabric.tgz
 
-# Single-container conveniences: resolve the Fabric MSP hostnames (used inside
-# the channel config / connection profile) back to loopback so gossip + orderer
-# delivery work without an external registry. Node refs handled via NodeSource.
-RUN printf '127.0.0.1 orderer.vsh.example.com peer0.vsh.example.com\n' >> /etc/hosts
-
 # Chaincode-as-a-service server + gateway app
 COPY --from=cc-builder /out/voiceshield-report-server /usr/local/bin/voiceshield-report-server
 COPY --from=gateway-deps /app/gateway /app/gateway

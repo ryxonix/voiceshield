@@ -14,6 +14,13 @@ mkdir -p "${DATA_DIR}/crypto-config" "${DATA_DIR}/channel-artifacts" \
          "${DATA_DIR}/wallet" "${DATA_DIR}/ledger" "${DATA_DIR}/cc" \
          "${DATA_DIR}/ipfs" /app/run
 
+# Resolve the Fabric MSP hostnames (used inside the channel config / connection
+# profile) back to loopback so gossip + orderer delivery work without an external
+# registry. Done at runtime — /etc/hosts is read-only during image build.
+if ! grep -q 'orderer.vsh.example.com' /etc/hosts; then
+  printf '127.0.0.1 orderer.vsh.example.com peer0.vsh.example.com\n' >>/etc/hosts
+fi
+
 echo "==> [1/3] crypto / channel artifacts / wallet / ccaas package (first boot)"
 bash /app/scripts/gen-network.sh
 
