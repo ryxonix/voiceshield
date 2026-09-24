@@ -41,21 +41,23 @@ fi
 # join (idempotent — swallow the "already member" error)
 peer channel join --blockpath "${DATA}/channel-artifacts/${CHANNEL}.block" 2>/dev/null || true
 
-# install ccaas package (install once, then rely on the deterministic id)
-PKG_ID=""
-if [ -s "${DATA}/cc/package-id" ]; then
-  PKG_ID=$(cat "${DATA}/cc/package-id")
-else
-  PKG_ID=$(peer lifecycle chaincode queryinstalled \
-    | grep -o "${CC_LABEL}:[a-f0-9]\{64\}" | head -n1 || true)
-fi
+# install ccaas package. The peer store is the source of truth for the package
+# id; gen-network.sh only pre-writes ${DATA}/cc/package-id so the ccaas server
+# can register with the matching id. Never skip install based on that file
+# alone, or the definition commits while the peer has no package.
+PKG_ID=$(peer lifecycle chaincode queryinstalled \
+  | grep -o "${CC_LABEL}:[a-f0-9]\{64\}" | head -n1 || true)
 if [ -z "${PKG_ID}" ]; then
   echo "==> installing chaincode ${CC_LABEL}"
   peer lifecycle chaincode install "${DATA}/cc/${CC_LABEL}.tgz"
-  PKG_ID=${PKG_ID:-$(peer lifecycle chaincode queryinstalled \
-    | grep -o "${CC_LABEL}:[a-f0-9]\{64\}" | head -n1)}
-  echo "${PKG_ID}" > "${DATA}/cc/package-id"
+  PKG_ID=$(peer lifecycle chaincode queryinstalled \
+    | grep -o "${CC_LABEL}:[a-f0-9]\{64\}" | head -n1)
 fi
+if [ -z "${PKG_ID}" ]; then
+  echo "FATAL: chaincode ${CC_LABEL} not present after install" >&2
+  exit 1
+fi
+echo "${PKG_ID}" > "${DATA}/cc/package-id"
 echo "    package id ${PKG_ID}"
 
 # approve + commit (skip if already committed)
@@ -78,9 +80,11 @@ for _ in $(seq 1 30); do
   if peer chaincode query --channelID ${CHANNEL} --name ${CC_NAME} \
      -c '{"Args":["QueryAll"]}' >/dev/null 2>&1; then
     echo "    chaincode ${CC_NAME} live on ${CHANNEL}"
+    touch "${DATA}/bootstrap-ready"
     exit 0
   fi
   sleep 3
 done
 echo "WARN: chaincode not answering yet — will be ready on the first request" 2>&1 || true
+touch "${DATA}/bootstrap-ready"
 exit 0
