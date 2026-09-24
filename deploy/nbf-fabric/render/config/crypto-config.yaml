@@ -8,7 +8,6 @@ OrdererOrgs:
     Domain: vsh.example.com
     Specs:
       - Hostname: orderer
-        CommonName: orderer
         SANS:
           - "localhost"
 
