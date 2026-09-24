@@ -10,8 +10,6 @@ peer:
   id: peer0.vsh.example.com
   networkId: vsh-net
   listenAddress: 0.0.0.0:7051
-  chaincodeListenAddress: 0.0.0.0:7052
-  chaincodeAddress: 0.0.0.0:7052
   address: 127.0.0.1:7051
   addressAutoDetect: false
   keepalive:

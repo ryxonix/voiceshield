@@ -38,8 +38,10 @@ COPY gateway/ ./
 # CI, which broke curl -fSL; Docker Hub pulls are reliable from GHA runners.
 FROM ipfs/kubo:${KUBO_IMAGE_TAG} AS kubo
 
-# ---- Stage 4: runtime (Ubuntu 20.04, matching the NBF-Lite baseline) --------
-FROM ubuntu:20.04 AS runtime
+# ---- Stage 4: runtime (Ubuntu 22.04) ----------------------------------------
+# glibc >= 2.34 is required by ipfs/kubo release binaries (needs GLIBC_2.34);
+# Ubuntu 22.04 ships glibc 2.35 and still runs the Fabric 2.2 binaries.
+FROM ubuntu:22.04 AS runtime
 
 ARG TARGETARCH
 # Fabric releases only publish linux-amd64 binary tarballs for the 2.2 LTS line.
@@ -58,7 +60,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 # Node 20 runtime from NodeSource (avoid mixing the Debian-based node:20 image's
-# /usr/local into ubuntu:20.04). gateway/ node_modules are pure JS and copy over.
+# /usr/local into ubuntu:22.04). gateway/ node_modules are pure JS and copy over.
 RUN set -eux; \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash -; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs; \

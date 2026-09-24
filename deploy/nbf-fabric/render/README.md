@@ -19,7 +19,7 @@ Everything lives in one container and is supervised by `supervisord`.
   must be built/run as `linux/amd64`, and the Dockerfile refuses other arches).
 - `fabric-contract-api-go v1.2.2` chaincode, run with `shim.ChaincodeServer`.
 - Kubo (IPFS) `v0.43.0` (runs `ipfs daemon --offline`).
-- Node.js 20 (NodeSource) on Ubuntu 20.04 runtime.
+- Node.js 20 (NodeSource) on Ubuntu 22.04 runtime (glibc 2.35 for Kubo).
 
 ## How it works (boot sequence)
 
