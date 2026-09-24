@@ -33,14 +33,18 @@ COPY gateway/package.json gateway/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY gateway/ ./
 
-# ---- Stage 3: runtime (Ubuntu 20.04, matching the NBF-Lite baseline) ------
+# ---- Stage 3: Kubo IPFS binary source (official image) ---------------------
+# The dist.ipfs.tech / GitHub release tarball endpoints intermittently 404 in
+# CI, which broke curl -fSL; Docker Hub pulls are reliable from GHA runners.
+FROM ipfs/kubo:${KUBO_IMAGE_TAG} AS kubo
+
+# ---- Stage 4: runtime (Ubuntu 20.04, matching the NBF-Lite baseline) --------
 FROM ubuntu:20.04 AS runtime
 
 ARG TARGETARCH
 # Fabric releases only publish linux-amd64 binary tarballs for the 2.2 LTS line.
 # v2.2.15 is the last 2.2.x release and matches the deploy stack (peer:2.2).
 ARG FABRIC_VERSION=2.2.15
-ARG KUBO_IMAGE_TAG=0.43.0
 
 ENV FABRIC_CFG_PATH=/app/config \
     HOME=/app \
@@ -60,10 +64,8 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs; \
     rm -rf /var/lib/apt/lists/*
 
-# Kubo IPFS binary — copied from the official image on Docker Hub (the
-# dist.ipfs.tech / GitHub release tarball endpoints intermittently 404 in CI,
-# which broke curl -fSL; Docker Hub pulls are reliable from GHA runners).
-COPY --from=ipfs/kubo:${KUBO_IMAGE_TAG} /usr/local/bin/ipfs /usr/local/bin/ipfs
+# Kubo IPFS binary — pulled from the official image stage above.
+COPY --from=kubo /usr/local/bin/ipfs /usr/local/bin/ipfs
 
 # Fabric 2.2 binaries (Official release tarball: peer, orderer, cryptogen, configtxgen)
 RUN set -eux; \
