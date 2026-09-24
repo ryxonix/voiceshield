@@ -30,6 +30,17 @@ peer:
     listenAddress: 127.0.0.1:9444
     tls:
       enabled: false
+  handlers:
+    authFilters:
+      - name: DefaultAuth
+    decorators:
+      - name: DefaultDecorator
+    endorsers:
+      escc:
+        name: DefaultEndorsement
+    validators:
+      vscc:
+        name: DefaultValidation
 
 vm:
   endpoint: ""

@@ -40,7 +40,7 @@ Organizations:
         Type: Signature
         Rule: "OR('Org1MSP.peer')"
     AnchorPeers:
-      - Host: peer0.vsh.example.com
+      - Host: 127.0.0.1
         Port: 7051
 
 Capabilities:
@@ -75,7 +75,7 @@ Application: &ApplicationDefaults
 Orderer: &OrdererDefaults
   OrdererType: solo
   Addresses:
-    - orderer.vsh.example.com:7050
+    - 127.0.0.1:7050
   BatchTimeout: 2s
   BatchSize:
     MaxMessageCount: 10
