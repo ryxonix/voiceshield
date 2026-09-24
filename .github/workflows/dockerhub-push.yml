@@ -1,0 +1,45 @@
+name: Build & push to Docker Hub (linux/amd64)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/nbf-fabric/**'
+
+env:
+  IMAGE_NAME: ryxonix/nbf-lite-voiceshield
+  FABRIC_VERSION: 2.2.15
+  KUBO_VERSION: 0.43.0
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: deploy/nbf-fabric
+          file: deploy/nbf-fabric/render/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          build-args: |
+            FABRIC_VERSION=${{ env.FABRIC_VERSION }}
+            KUBO_VERSION=${{ env.KUBO_VERSION }}

@@ -1,0 +1,29 @@
+# Render Blueprint — deploy the VoiceShield NBF anchor from Docker Hub.
+# Use "New > Blueprint" in https://dashboard.render.com and point at this repo.
+# Pulls ryxonix/nbf-lite-voiceshield:latest (built+pushed by .github/workflows/dockerhub-push.yml).
+services:
+  - type: web
+    name: nbf-lite-voiceshield
+    runtime: image
+    plan: free
+    image:
+      url: docker.io/ryxonix/nbf-lite-voiceshield:latest
+    healthCheckPath: /health
+    envVars:
+      - key: DATA_DIR
+        value: /app/data
+      - key: CCP_FILE
+        value: /app/data/connection-org1.json
+      - key: WALLET_DIR
+        value: /app/data/wallet
+      - key: IPFS_API_HOST
+        value: 127.0.0.1
+      - key: IPFS_API_PORT
+        value: "5001"
+      - key: IPFS_GATEWAY
+        value: http://127.0.0.1:8080
+      - key: GATEWAY_PORT
+        value: "4000"
+      # Backend wiring for the VoiceShield app that consumes this anchor:
+      - key: BLOCKCHAIN_EXTERNAL_ANCHOR
+        value: "true"

@@ -86,5 +86,6 @@ app.post('/fabric/v1/querycc', async (req, res) => {
   }
 });
 
-const PORT = process.env.GATEWAY_PORT || 4000;
+// Bind to the platform-injected $PORT (Render / Cloud Run) when present.
+const PORT = process.env.PORT || process.env.GATEWAY_PORT || 4000;
 app.listen(PORT, () => console.log(`VoiceShield NBF gateway on :${PORT}`));

@@ -6,8 +6,9 @@ single `ReportAnchor` asset. Invoked by the VoiceShield backend through an
 NBF-samplerest-compatible REST gateway (deploy/nbf-fabric/gateway).
 
 Asset (reportAnchor):
-  call_id, report_id, incident_id, file_sha256, merkle_root, block_hash,
-  timestamp, ipfs_cid, enc_alg, key_fp
+
+	call_id, report_id, incident_id, file_sha256, merkle_root, block_hash,
+	timestamp, ipfs_cid, enc_alg, key_fp
 
 Data-privacy note: only hashes/CID/fingerprint are stored on the ledger. The
 AES-256-GCM ciphertext lives on IPFS only, under operator custody.
@@ -17,7 +18,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 
+	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
@@ -65,8 +68,9 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 
 // AnchorReport records an external anchor for a VoiceShield report block.
 // Args (order matches the backend's I4CAnchor._fabric_invoke):
-//   0 call_id 1 report_id 2 incident_id 3 file_sha256 4 merkle_root
-//   5 block_hash 6 timestamp 7 ipfs_cid 8 enc_alg 9 key_fp
+//
+//	0 call_id 1 report_id 2 incident_id 3 file_sha256 4 merkle_root
+//	5 block_hash 6 timestamp 7 ipfs_cid 8 enc_alg 9 key_fp
 func (s *SmartContract) AnchorReport(
 	ctx contractapi.TransactionContextInterface,
 	callID, reportID, incidentID, fileSHA256, merkleRoot, blockHash, timestamp, ipfsCID, encAlg, keyFingerprint string,
@@ -140,6 +144,27 @@ func main() {
 		fmt.Printf("Error creating VoiceShield anchors chaincode: %s", err)
 		return
 	}
+
+	// Chaincode-as-a-service mode (no Docker): run the contract as a standalone
+	// gRPC server the peer connects to (deploy/nbf-fabric/render/Dockerfile).
+	// Falls back to the classic in-process launch when the env var is unset.
+	if addr := os.Getenv("CHAINCODE_SERVER_ADDRESS"); addr != "" {
+		ccid := os.Getenv("CORE_CHAINCODE_ID_NAME")
+		if ccid == "" {
+			ccid = "voiceshield-report_1.0"
+		}
+		server := &shim.ChaincodeServer{
+			CCID:     ccid,
+			Address:  addr,
+			CC:       chaincode,
+			TLSProps: shim.TLSProperties{Disabled: true},
+		}
+		if err := server.Start(); err != nil {
+			fmt.Printf("Error starting VoiceShield anchors chaincode server: %s", err)
+		}
+		return
+	}
+
 	if err := chaincode.Start(); err != nil {
 		fmt.Printf("Error starting VoiceShield anchors chaincode: %s", err)
 	}

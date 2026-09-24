@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# VoiceShield AI — entrypoint for the single-container NBF anchor image.
+# Order: generate crypto/artifacts (first boot) -> start services -> channel +
+# chaincode lifecycle (idempotent) -> keep supervisord in the foreground as the
+# container's lifetime.
+set -euo pipefail
+
+export HOME=/app
+export PATH=/usr/local/bin:${PATH}
+export FABRIC_CFG_PATH=/app/config
+export DATA_DIR=${DATA_DIR:-/app/data}
+
+mkdir -p "${DATA_DIR}/crypto-config" "${DATA_DIR}/channel-artifacts" \
+         "${DATA_DIR}/wallet" "${DATA_DIR}/ledger" "${DATA_DIR}/cc" \
+         "${DATA_DIR}/ipfs" /app/run
+
+echo "==> [1/3] crypto / channel artifacts / wallet / ccaas package (first boot)"
+bash /app/scripts/gen-network.sh
+
+echo "==> [2/3] starting supervised services (orderer, ipfs, chaincode, peer, gateway)"
+/usr/bin/supervisord -c /app/supervisord.conf &
+SUP_PID=$!
+
+trap 'kill -TERM "${SUP_PID}" 2>/dev/null || true; wait "${SUP_PID}" 2>/dev/null || true' TERM INT
+
+echo "==> [3/3] channel create + join + chaincode lifecycle (idempotent)"
+if ! bash /app/scripts/bootstrap.sh; then
+  echo "WARNING: bootstrap incomplete (peer/orderer may still be warming up)" >&2
+fi
+
+wait "${SUP_PID}"

@@ -1,0 +1,16 @@
+# Build context is deploy/nbf-fabric/ — keep huge/generated files out of the build.
+.git
+.gitignore
+**/*.log
+crypto-config
+channel-artifacts
+gateway/.dockerignore
+gateway/node_modules
+gateway/wallet
+gateway/connection-org1.json
+docs
+swagger
+tools
+scripts/__pycache__
+**/__pycache__
+**/*.pyc
