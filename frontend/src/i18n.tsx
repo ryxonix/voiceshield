@@ -42,6 +42,8 @@ const hi: Record<string, string> = {
     'VoiceShield कॉल के लाइव ऑडियो में AI-जनित भाषण की जाँच करता है — एकॉस्टिक मॉडल, प्रोज़ोडिक साक्ष्य और एंटरप्राइज़ वॉटरमार्किंग, सब मिलाकर एक actionable स्कोर।',
   'View forensics': 'फोरेंसिक्स देखें',
   'Start live session': 'लाइव सत्र शुरू करें',
+  'Prototype — this website shows how the VoiceShield Android app will work.': 'प्रोटोटाइप — यह वेबसाइट दिखाती है कि VoiceShield एंड्रॉइड ऐप कैसे काम करेगा।',
+  'On the phone the same pipeline runs fully on-device — raw audio never leaves it. This site streams your mic into the identical engine so you can watch it happen.': 'फ़ोन पर यही पाइपलाइन पूरी तरह डिवाइस पर चलती है — कच्चा ऑडियो कभी बाहर नहीं जाता। यह साइट आपका माइक उसी इंजन में भेजकर दिखाती है कि यह कैसे होता है।',
 
   /* ── Dashboard: intro paragraphs ───────────────────────────────────── */
   'Every second, VoiceShield slides a fresh window across the call stream and runs it through three independent checks: a graph-attention acoustic model (AASIST-L), sub-phonemic prosodic analysis — jitter, shimmer and spectral phase continuity — and a watermark verifier that recognizes authorized enterprise callers instantly.':
@@ -263,6 +265,8 @@ const kn: Record<string, string> = {
     'VoiceShield ಲೈವ್ ಕರೆ ಆಡಿಯೊದಲ್ಲಿ AI-ರಚಿತ ಧ್ವನಿಯನ್ನು ವಿಶ್ಲೇಷಿಸುತ್ತದೆ — ಅಕೌಸ್ಟಿಕ್ ಮಾಡೆಲ್, ಪ್ರಾಸೊಡಿಕ್ ಸಾಕ್ಷ್ಯ ಮತ್ತು ಎಂಟರ್ಪ್ರೈಸ್ ವಾಟರ್ಮಾರ್ಕಿಂಗ್, ಎಲ್ಲವನ್ನು ಒಂದೇ actionable ಸ್ಕೋರ್‌ಗೆ ಸೇರಿಸಿ.',
   'View forensics': 'ಫೋರೆನ್ಸಿಕ್ಸ್ ನೋಡಿ',
   'Start live session': 'ಲೈವ್ ಸೆಷನ್ ಪ್ರಾರಂಭಿಸಿ',
+  'Prototype — this website shows how the VoiceShield Android app will work.': 'ಪ್ರೊಟೊಟೈಪ್ — ಈ ವೆಬ್‌ಸೈಟ್ VoiceShield Android ಆ್ಯಪ್ ಹೇಗೆ ಕೆಲಸ ಮಾಡುತ್ತದೆ ಎಂದು ತೋರಿಸುತ್ತದೆ.',
+  'On the phone the same pipeline runs fully on-device — raw audio never leaves it. This site streams your mic into the identical engine so you can watch it happen.': 'ಫೋನ್‌ನಲ್ಲಿ ಅದೇ ಪೈಪ್‌ಲೈನ್ ಸಂಪೂರ್ಣವಾಗಿ ಸಾಧನದಲ್ಲೇ ಚಲಿಸುತ್ತದೆ — ಕಚ್ಚಾ ಆಡಿಯೊ ಎಂದಿಗೂ ಹೊರಗೆ ಹೋಗುವುದಿಲ್ಲ. ಈ ಸೈಟ್ ನಿಮ್ಮ ಮೈಕ್ ಅನ್ನು ಅದೇ ಎಂಜಿನ್‌ಗೆ ಸ್ಟ್ರೀಮ್ ಮಾಡಿ, ಅದು ಹೇಗೆ ನಡೆಯುತ್ತದೆ ಎಂದು ತೋರಿಸುತ್ತದೆ.',
 
   /* ── Dashboard: intro paragraphs ───────────────────────────────────── */
   'Every second, VoiceShield slides a fresh window across the call stream and runs it through three independent checks: a graph-attention acoustic model (AASIST-L), sub-phonemic prosodic analysis — jitter, shimmer and spectral phase continuity — and a watermark verifier that recognizes authorized enterprise callers instantly.':

@@ -30,7 +30,7 @@ export default function ProjectWorking() {
       <Breadcrumbs trail={['Project Working', 'Overview']} />
       <PageHeader
         title="Project Working"
-        meta="How VoiceShield AI works — the proposed solution, technical approach, feasibility, impacts, and the research sources behind it."
+        meta="How VoiceShield works — the product is a fully on-device Android app (data plane → main engine → evidence ledger). This website is the working prototype that runs the identical pipeline in your browser."
       />
 
       <div className="sticky top-20 z-20 mt-6 flex gap-2 overflow-x-auto rounded-xl bg-[#FAF8F5]/95 pb-1 pt-0.5 backdrop-blur lg:hidden">
@@ -48,7 +48,7 @@ export default function ProjectWorking() {
       <Divider />
 
       <Section id="solution" n="01" title="VoiceShield — Proposed Solution"
-        lead="A zero-trust, real-time audio deepfake detection and mitigation platform for the Indian telecom context. VoiceShield listens to live voice calls over WebSocket streaming — or analyzes uploaded audio — and decides, in real time, whether the speaker is a real human (bonafide) or a synthetic / AI-cloned voice (spoof).">
+        lead="A zero-trust, real-time audio deepfake detection and mitigation platform for the Indian telecom context, built as a fully on-device Android app. VoiceShield scores live calls on the phone itself and decides, in real time, whether the speaker is a real human (bonafide) or a synthetic / AI-cloned voice (spoof). This website is the working prototype — it runs the identical pipeline over a browser so you can watch it happen.">
         <h3 className="mt-1 text-[15px] font-bold text-zinc-900">The problem</h3>
         <p className="mt-2 leading-relaxed text-zinc-700">
           AI voice cloning has collapsed the cost of impersonation: a few seconds of
@@ -61,27 +61,35 @@ export default function ProjectWorking() {
 
         <h3 className="mt-6 text-[15px] font-bold text-zinc-900">The proposed solution</h3>
         <p className="mt-2 leading-relaxed text-zinc-700">
-          VoiceShield scores each window of a call with an ensemble of open Indian-language
-          deepfake detectors fused with explainable prosodic evidence and an enterprise
-          watermark verifier. Every forensic incident is anchored to a tamper-evident,
-          mandatory on-chain ledger — fail-closed by design, so no report is ever issued
-          without provable evidence.
+          VoiceShield scores each window of a call on-device with an ensemble of open Indian-language
+          deepfake detectors, fused with explainable prosodic evidence and an enterprise watermark
+          verifier; raw audio never leaves the phone. Every forensic incident is anchored to a
+          tamper-evident, mandatory on-chain ledger — fail-closed by design, so no report is ever
+          issued without provable evidence.
         </p>
 
-        <Fig title="How a call is processed — one continuous pipeline"
-          caption="Raw audio lives in RAM only, overwritten every window (DPDP-aware). Every step is open, explainable and auditable.">
+        <Fig title="How the Android app scores a call — one pipeline, three planes"
+          caption="Data plane → main engine → evidence ledger. Detection runs on the phone; only scalar evidence + hashes reach the server-ledger plane. This web prototype runs the identical steps in your browser.">
           <PipelineTimeline
             steps={[
-              { n: '01', title: 'Call audio', sub: 'live PCM 16 kHz mono — mic stream or uploaded file', tone: 'brand' },
-              { n: '02', title: 'WebSocket → ring buffer', sub: '3 s window / 1 s hop; RAM only, no disk write', tone: 'brand' },
-              { n: '03', title: 'Model ensemble', sub: 'Dhwani (XLS-R + AASIST) · AASIST-L official · local fallback · Cloud XLS-R', tone: 'brand' },
-              { n: '04', title: 'XAI prosody layer', sub: 'jitter · shimmer · phase continuity · pitch stability · voice-print', tone: 'brand' },
-              { n: '05', title: 'Fusion → verdict', sub: 'score = 0.7 × model + 0.3 × XAI → risk band, role-aware thresholds', tone: 'brand' },
-              { n: '06', title: 'Alerts + forensic PDF', sub: 'Telegram / Gmail / ntfy.sh / Fast2SMS / webhook → I4C-ready PDF', tone: 'brand' },
-              { n: '07', title: 'NBF evidence anchor', sub: 'SHA-256 + Merkle root → PoW ledger → Fabric + IPFS, mandatory, fail-closed', tone: 'red' },
+              { n: '01', title: 'App capture — data plane', sub: 'on-device mic, Android AudioRecord, PCM 16 kHz mono int16, VAD + silence gate', tone: 'brand' },
+              { n: '02', title: 'Ring buffer + Kotlin DSP — data plane', sub: '3 s / 1 s windows in RAM: FFT · autocorrelation pitch · jitter/shimmer · phase continuity · watermark 7.0–7.5 kHz', tone: 'brand' },
+              { n: '03', title: 'Main engine — AASIST-L on-device', sub: 'onnxruntime-android + NNAPI · INT8 model (~2 MB) bundled in the APK · watermark short-circuit → score 0.0', tone: 'brand' },
+              { n: '04', title: 'XAI prosody + voice-print — main engine', sub: 'jitter · shimmer · phase continuity · pitch stability · enrolled speaker consistency — identical features, on-device', tone: 'brand' },
+              { n: '05', title: 'Fusion → verdict — main engine', sub: 'score = 0.7 × model + 0.3 × XAI → risk band, role-aware thresholds (child ≥ 70% / adult ≥ 85%)', tone: 'brand' },
+              { n: '06', title: 'Mitigation on-device', sub: 'risk banner · child-shield overlay · pre-transaction prompts — no server round-trip needed', tone: 'brand' },
+              { n: '07', title: 'Evidence ledger — server anchor', sub: 'scalar evidence + hashes → server forensic PDF → PoW ledger → NBF-Fabric + IPFS anchor, mandatory, fail-closed', tone: 'red' },
             ]}
           />
         </Fig>
+
+        <div className="mt-2 rounded-xl border border-[#DBEAFE] bg-[#EFF6FF] px-5 py-4 text-[13.5px] leading-relaxed text-zinc-700">
+          <span className="font-bold text-[#1D4ED8]">This website is the prototype.</span> It runs the
+          exact pipeline shown above in your browser — the microphone streams PCM over WebSocket into the
+          same engine (<code className="font-mono">backend/app/engine</code>) with the same fusion rules and the same
+          mandatory ledger anchor. On Android the same engine is fed from the on-device ring buffer
+          instead; no raw audio ever leaves the phone.
+        </div>
 
         <h3 className="mt-8 text-[15px] font-bold text-zinc-900">Innovation and uniqueness</h3>
         <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
@@ -114,7 +122,7 @@ export default function ProjectWorking() {
       </Section>
 
       <Section id="approach" n="02" title="Technical Approach"
-        lead="A fast real-time detector keeps streaming analysis ahead of the audio cadence, while a heavier multi-model ensemble powers deep forensic analysis of recorded files.">
+        lead="A fast on-device detector keeps window analysis ahead of the audio cadence on a phone CPU, while a heavier multi-model ensemble powers deep forensic analysis of recorded files on the operator server. This section is the Android three-plane architecture; a prototype diagram that mirrors it on the server follows.">
         <h3 className="mt-1 text-[15px] font-bold text-zinc-900">Detection pipeline and fusion</h3>
         <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
           <Fact dot={BRAND} title="Realtime profile (default)" body="AASIST-L official + XAI prosody per 3 s window — ~1.5–1.6 s median on a reference CPU, enforced fail-hard at a 2000 ms budget." />
@@ -123,7 +131,11 @@ export default function ProjectWorking() {
           <Fact dot={AMBER} title="Windows" body="3 s / 1 s hop by default (300 ms / 100 ms legacy fallback for small AASIST checkpoints)." />
         </ul>
 
-        <Fig title="System architecture" caption="Three planes — data ingress, detection engine, and the mandatory evidence ledger.">
+        <Fig title="Android app architecture — the three planes" caption="Detection stays on the phone; only scalar evidence + hashes reach the operator server, which anchors every report to the mandatory NBF-Fabric + IPFS ledger.">
+          <AndroidPlanesSvg />
+        </Fig>
+
+        <Fig title="Prototype surface — this website (same planes, server transport)" caption="The web prototype runs the identical engine and ledger; the only difference is capture — the browser mic streams PCM over WebSocket instead of the on-device ring buffer.">
           <ArchSvg />
         </Fig>
 
@@ -142,16 +154,20 @@ export default function ProjectWorking() {
               </tr>
             </thead>
             <tbody>
-              <Row k="Frontend" v="React 19 · Vite 8 · Tailwind 4 · TypeScript" n="Editorial UI, i18n en / hi / kn, live WebSocket monitor" />
-              <Row k="Backend" v="FastAPI · Uvicorn · WebSockets · Pydantic-settings" n="REST + streaming + in-process gRPC service on :50051" />
+              <Row k="Android app (target)" v="Kotlin · Jetpack Compose · Material 3" n="Fully on-device detection — data plane, main engine and evidence ledger all on the phone" />
+              <Row k="On-device ML" v="onnxruntime-android + NNAPI · bundled AASIST-L INT8 (< 2 MB)" n="Data-plane DSP in Kotlin: FFT · pitch · jitter/shimmer · phase · watermark band 7.0–7.5 kHz" />
+              <Row k="App storage & sync" v="Room · Android Keystore (AES-256-GCM) · WorkManager · Retrofit + gRPC stubs" n="Local PoW block (pending) → REST evidence sync → server anchor (anchored); retry on failure" />
+              <Row k="Frontend (prototype)" v="React 19 · Vite 8 · Tailwind 4 · TypeScript" n="This website — runs the identical pipeline in the browser over WebSocket; i18n en / hi / kn" />
+              <Row k="Backend (prototype + operator)" v="FastAPI · Uvicorn · WebSockets · Pydantic-settings" n="REST + streaming + in-process gRPC service on :50051; forensics + NBF anchor" />
               <Row k="Inference" v="ONNX Runtime (2 inter / 4 intra CPU threads) · librosa" n="CPU-only for zero-cloud operation" />
               <Row k="Models" v="Dhwani (XLS-R 300m + AASIST, ONNX INT8) · AASIST-L ×2 · Cloud XLS-R" n="MIT weights; ~1.2 GB Dhwani, sub-2 MB AASIST-L official" />
               <Row k="XAI" v="jitter · shimmer · phase continuity · watermark FFT" n="4096-pt FFT, 7.0–7.5 kHz pilot, ≥ 12× noise floor" />
               <Row k="Storage" v="SQLite local · optional Neon PostgreSQL" n="RAM-only ring buffer for live audio; hashes, not audio" />
               <Row k="Alerts" v="Telegram · Gmail SMTP · ntfy.sh · Fast2SMS · webhook" n="Optional; missing keys skipped at runtime" />
               <Row k="Ledger" v="SHA-256 PoW · Hyperledger Fabric (NBFLite) · IPFS" n="Mandatory external anchor, fail-closed by default" />
+              <Row k="Bhashini (yet to train)" v="IndicWav2Vec backbone · IndicVoices + KathBath (Bhashini / AI4Bharat)" n="Indic-ensemble + distilled on-device model — training staged in the pipeline" />
               <Row k="Cloud training" v="Google Colab free T4 · Kaggle T4×2 (notebooks 01–04)" n="Only for optional cloud classifier training" />
-              <Row k="Deploy" v="Docker Compose · WSL2 · Oracle Always-Free ARM A1" n="Zero-cost path verified end-to-end" />
+              <Row k="Deploy" v="Docker Compose · WSL2 · Oracle Always-Free ARM A1 · APK build" n="Zero-cost path verified end-to-end; app ledger syncs to the same anchored backend" />
             </tbody>
           </table>
         </div>
@@ -202,8 +218,8 @@ export default function ProjectWorking() {
         lead="Every model, dataset, codec standard, regulator and platform referenced in this document — with links. All third-party content is attributed per its license.">
         <Fig title="Open-source and reference ecosystem" caption="Color-coded by role — models, datasets, benchmarks, codecs, regulators and free-tier infrastructure.">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Cluster tone="brand" title="Models (MIT)" chips={['AASIST / AASIST-L · clovaai', 'Dhwani · ayush2635 (XLS-R + AASIST)', 'Cloud XLS-R fine-tune · ours']} />
-            <Cluster tone="green" title="Datasets" chips={['Google FLEURS · CC-BY-4.0', 'Mozilla Common Voice · CC0 / CC-BY-4.0']} />
+            <Cluster tone="brand" title="Models (MIT)" chips={['AASIST / AASIST-L · clovaai', 'Dhwani · ayush2635 (XLS-R + AASIST)', 'Cloud XLS-R fine-tune · ours', 'IndicWav2Vec · AI4Bharat (to-be-trained ensemble)']} />
+            <Cluster tone="green" title="Datasets" chips={['Google FLEURS · CC-BY-4.0', 'Mozilla Common Voice · CC0 / CC-BY-4.0', 'IndicVoices (Bhashini) · CC-BY-4.0', 'KathBath / IndicSUPERB (Bhashini) · CC0']} />
             <Cluster tone="purple" title="Benchmarks" chips={['ASVspoof 2019 LA · research-only', 'Pindrop Pulse · Resemble Detect · Truecaller AI']} />
             <Cluster tone="amber" title="Codecs" chips={['ITU-T G.711 · PSTN', '3GPP TS 26.190 · AMR-WB (VoLTE)', 'ITU-T G.722.2 · AMR-WB']} />
             <Cluster tone="red" title="Regulators & reporting" chips={['cybercrime.gov.in · 1930', 'MeitY · DPDP Act 2023 · IndiaAI', 'TRAI lawful-interception', 'DoT Sanchar Saathi / Chakshu / DIP']} />
@@ -224,12 +240,15 @@ export default function ProjectWorking() {
             <tbody>
               <RefRow k="Models" v="AASIST / AASIST-L — countermeasure (MIT, ICASSP 2022)" h="https://github.com/clovaai/aasist" />
               <RefRow k="Models" v="Dhwani — Wav2Vec2 XLS-R 300m + AASIST (MIT weights)" h="https://huggingface.co/ayush2635/Dhwani-Multilingual-Deepfake-Audio-Detection-Model" />
+              <RefRow k="Models" v="IndicWav2Vec — AI4Bharat Indic backbone for the to-be-trained deepfake ensemble (MIT)" h="https://huggingface.co/ai4bharat" />
               <RefRow k="Benchmark" v="ASVspoof 2019 LA — reference benchmark only (not bundled)" h="https://www.asvspoof.org" />
               <RefRow k="Benchmark" v="Pindrop Pulse — commercial voice-fraud detection" h="https://www.pindrop.com" />
               <RefRow k="Benchmark" v="Resemble Detect — commercial AI-audio deepfake API" h="https://www.resemble.ai" />
               <RefRow k="Benchmark" v="Truecaller AI — caller-ID and spam defence" h="https://www.truecaller.com" />
               <RefRow k="Dataset" v="Google FLEURS (CC-BY-4.0) — hi/en/kn/ta/te/ml/mr bonafide" h="https://huggingface.co/datasets/google/fleurs" />
               <RefRow k="Dataset" v="Mozilla Common Voice (CC0 ≤ v13; CC-BY-4.0 v14+)" h="https://commonvoice.mozilla.org" />
+              <RefRow k="Dataset" v="IndicVoices (Bhashini · CC-BY-4.0) — 23.7k hrs, 22 languages" h="https://huggingface.co/datasets/ai4bharat/IndicVoices" />
+              <RefRow k="Dataset" v="KathBath / IndicSUPERB (Bhashini · CC0) — 1,684 hrs, 12 languages" h="https://huggingface.co/datasets/ai4bharat/Kathbath" />
               <RefRow k="Codec" v="ITU-T G.711 — PSTN A-law / μ-law (64 kbps)" h="https://www.itu.int/rec/T-REC-G.711" />
               <RefRow k="Codec" v="3GPP TS 26.190 — AMR-WB (VoLTE HD voice)" h="https://www.3gpp.org/DynaReport/26190.htm" />
               <RefRow k="Codec" v="ITU-T G.722.2 — AMR-WB wideband speech coding" h="https://www.itu.int/rec/T-REC-G.722.2" />
@@ -429,7 +448,7 @@ function ArchSvg() {
         <rect x="16" y="64" width="160" height="58" rx="8" fill="#ffffff" stroke={LINE} />
         <rect x="16" y="64" width="160" height="3" rx="1.5" fill={BRAND} />
         <text x="28" y="86" fontSize="12.5" fontWeight="700" fill={INK}>WebSocket</text>
-        <text x="28" y="104" fontSize="10.5" fill={MUTED}>live PCM 16 kHz</text>
+        <text x="28" y="104" fontSize="10.5" fill={MUTED}>browser mic · prototype</text>
         <rect x="188" y="64" width="160" height="58" rx="8" fill="#ffffff" stroke={LINE} />
         <rect x="188" y="64" width="160" height="3" rx="1.5" fill={BRAND} />
         <text x="200" y="86" fontSize="12.5" fontWeight="700" fill={INK}>REST /api/*</text>
@@ -508,6 +527,91 @@ function ArchSvg() {
         <text x="587" y="405" fontSize="11.5" fontWeight="700" fill={INK} textAnchor="middle">Fabric + IPFS anchor</text>
         <text x="587" y="421" fontSize="9.5" fontWeight="700" fill={RED} textAnchor="middle" letterSpacing="0.08em">MANDATORY · FAIL-CLOSED</text>
       </g>
+    </svg>
+  )
+}
+
+function AndroidPlanesSvg() {
+  return (
+    <svg viewBox="0 0 720 340" className="block h-auto w-full" role="img" aria-label="Android app architecture — data plane, main engine, evidence ledger">
+      {/* 1 · DATA PLANE */}
+      <g>
+        <rect x="16" y="44" width="212" height="268" rx="10" fill="#ffffff" stroke={LINE} />
+        <rect x="16" y="44" width="212" height="4" rx="2" fill={BRAND} />
+        <text x="31" y="70" fontSize="12.5" fontWeight="700" fill={INK}>1 · DATA PLANE</text>
+        <text x="31" y="86" fontSize="9.5" fontWeight="700" fill={MUTED}>ON-DEVICE · KOTLIN</text>
+        <circle cx="28" cy="112" r="2.5" fill={BRAND} />
+        <text x="37" y="117" fontSize="11" fill="#52525B">AudioRecord 16 kHz</text>
+        <circle cx="28" cy="134" r="2.5" fill={BRAND} />
+        <text x="37" y="139" fontSize="11" fill="#52525B">ring buffer 3 s / 1 s</text>
+        <circle cx="28" cy="156" r="2.5" fill={BRAND} />
+        <text x="37" y="161" fontSize="11" fill="#52525B">VAD + silence gate</text>
+        <circle cx="28" cy="178" r="2.5" fill={BRAND} />
+        <text x="37" y="183" fontSize="11" fill="#52525B">FFT · autocorr pitch</text>
+        <circle cx="28" cy="200" r="2.5" fill={BRAND} />
+        <text x="37" y="205" fontSize="11" fill="#52525B">jitter · shimmer</text>
+        <circle cx="28" cy="222" r="2.5" fill={BRAND} />
+        <text x="37" y="227" fontSize="11" fill="#52525B">phase continuity</text>
+        <circle cx="28" cy="244" r="2.5" fill={BRAND} />
+        <text x="37" y="249" fontSize="11" fill="#52525B">watermark 7.0–7.5 kHz</text>
+        <text x="31" y="292" fontSize="10" fill={MUTED}>RAM only · no network</text>
+      </g>
+
+      {/* 2 · MAIN ENGINE */}
+      <g>
+        <rect x="254" y="44" width="212" height="268" rx="10" fill="#ffffff" stroke={LINE} />
+        <rect x="254" y="44" width="212" height="4" rx="2" fill={PURPLE} />
+        <text x="269" y="70" fontSize="12.5" fontWeight="700" fill={INK}>2 · MAIN ENGINE</text>
+        <text x="269" y="86" fontSize="9.5" fontWeight="700" fill={MUTED}>ON-DEVICE</text>
+        <circle cx="266" cy="112" r="2.5" fill={PURPLE} />
+        <text x="275" y="117" fontSize="11" fill="#52525B">onnxruntime-android + NNAPI</text>
+        <circle cx="266" cy="134" r="2.5" fill={PURPLE} />
+        <text x="275" y="139" fontSize="11" fill="#52525B">AASIST-L INT8 &lt; 2 MB (bundled)</text>
+        <circle cx="266" cy="156" r="2.5" fill={PURPLE} />
+        <text x="275" y="161" fontSize="11" fill="#52525B">prosodic XAI · voice-print</text>
+        <circle cx="266" cy="178" r="2.5" fill={PURPLE} />
+        <text x="275" y="183" fontSize="11" fill="#52525B">watermark → score 0.0</text>
+        <circle cx="266" cy="200" r="2.5" fill={PURPLE} />
+        <text x="275" y="205" fontSize="11" fill="#52525B">0.7 × model + 0.3 × XAI</text>
+        <circle cx="266" cy="222" r="2.5" fill={PURPLE} />
+        <text x="275" y="227" fontSize="11" fill="#52525B">risk bands · thresholds</text>
+        <circle cx="266" cy="244" r="2.5" fill={PURPLE} />
+        <text x="275" y="249" fontSize="11" fill="#52525B">mitigation on-device</text>
+        <text x="269" y="292" fontSize="10" fill={MUTED}>no storage · no network</text>
+      </g>
+
+      {/* 3 · EVIDENCE LEDGER */}
+      <g>
+        <rect x="492" y="44" width="212" height="268" rx="10" fill={RED50} stroke={LINE} />
+        <rect x="492" y="44" width="212" height="4" rx="2" fill={RED} />
+        <text x="507" y="70" fontSize="12.5" fontWeight="700" fill={INK}>3 · EVIDENCE LEDGER</text>
+        <text x="507" y="86" fontSize="9.5" fontWeight="700" fill={RED}>ON-DEVICE + SERVER</text>
+        <circle cx="504" cy="112" r="2.5" fill={RED} />
+        <text x="513" y="117" fontSize="11" fill="#52525B">Room + AES-256-GCM (Keystore)</text>
+        <circle cx="504" cy="134" r="2.5" fill={RED} />
+        <text x="513" y="139" fontSize="11" fill="#52525B">local PoW block — pending</text>
+        <circle cx="504" cy="156" r="2.5" fill={RED} />
+        <text x="513" y="161" fontSize="11" fill="#52525B">WorkManager → REST evidence</text>
+        <circle cx="504" cy="178" r="2.5" fill={RED} />
+        <text x="513" y="183" fontSize="11" fill="#52525B">server forensic PDF</text>
+        <circle cx="504" cy="200" r="2.5" fill={RED} />
+        <text x="513" y="205" fontSize="11" fill="#52525B">NBF-Fabric + IPFS anchor</text>
+        <circle cx="504" cy="222" r="2.5" fill={RED} />
+        <text x="513" y="227" fontSize="11" fill="#52525B">status = anchored</text>
+        <circle cx="504" cy="244" r="2.5" fill={RED} />
+        <text x="513" y="249" fontSize="11" fill="#52525B">scalar evidence + hashes only</text>
+        <text x="507" y="292" fontSize="10" fontWeight="700" fill={RED}>FAIL-CLOSED · NEVER "PENDING" AS ANCHORED</text>
+      </g>
+
+      {/* flow arrows between planes */}
+      <line x1="228" y1="178" x2="248" y2="178" stroke={MUTED} strokeWidth="1.5" />
+      <path d="M252 178 l-6 -4 v8 z" fill={MUTED} />
+      <line x1="466" y1="178" x2="486" y2="178" stroke={RED} strokeWidth="1.5" />
+      <path d="M490 178 l-6 -4 v8 z" fill={RED} />
+
+      <text x="360" y="330" fontSize="10" fill={MUTED} textAnchor="middle">
+        this web prototype = browser mic → WebSocket → same engine → same NBF ledger
+      </text>
     </svg>
   )
 }

@@ -77,6 +77,16 @@ export default function Dashboard({ liveOnly = false, onNavigate }: { liveOnly?:
       />
       <Divider />
 
+      {/* Prototype callout */}
+      <div className="rounded-xl border border-[#FCD34D] bg-[#FFFBEB] px-5 py-4">
+        <div className="font-serif text-[18px] font-bold leading-snug tracking-tight text-zinc-900">
+          {t('Prototype — this website shows how the VoiceShield Android app will work.')}
+        </div>
+        <p className="mt-1.5 text-[13.5px] leading-relaxed text-zinc-600">
+          {t('On the phone the same pipeline runs fully on-device — raw audio never leaves it. This site streams your mic into the identical engine so you can watch it happen.')}
+        </p>
+      </div>
+
       {/* Reading-column intro */}
       <div className="space-y-5 leading-relaxed text-zinc-700">
         <p>

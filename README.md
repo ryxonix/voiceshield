@@ -1,10 +1,47 @@
 # 🛡️ VoiceShield AI
 
-**Zero-trust, real-time audio deepfake detection and mitigation platform for the Indian telecom context.**
+**Zero-trust, real-time audio deepfake detection and mitigation platform for the Indian telecom context — built as a fully on-device Android app.**
 
-VoiceShield AI listens to live voice calls (or analyzes uploaded audio) and tells you in real time whether the speaker is a **real human** or a **synthetic/deepfake voice** (AI voice clone). It is built for use by telecom providers, banks, contact centers, and parents (Child Shield) — everything runs on a **free, open-licensed stack** (attribution licenses retained; full inventory in [`backend/SOURCES_AND_TECHNOLOGY.md`](backend/SOURCES_AND_TECHNOLOGY.md)).
+VoiceShield ships as an **Android app** that runs the whole pipeline on the phone: live calls are captured and scored by an **on-device engine** (acoustic model + prosodic XAI + enterprise watermark), and each incident is sealed into an on-device evidence block that an operator server anchors to a **mandatory Hyperledger Fabric + IPFS (NBF)** ledger — fail-closed, so a report is only ever handed off with a provable on-chain anchor. It is built for use by telecom providers, banks, contact centers, and parents (Child Shield) — everything runs on a **free, open-licensed stack** (attribution licenses retained; full inventory in [`backend/SOURCES_AND_TECHNOLOGY.md`](backend/SOURCES_AND_TECHNOLOGY.md)).
 
 > 🔴 **SIH-ready** — all training data is from open licenses (FLEURS CC-BY-4.0, Common Voice CC-BY-4.0 — CC0 for v13 and earlier, self-generated TTS + **real voice-clone impersonation** via XTTS-v2/RVC/FreeVC). See [`backend/SOURCES_AND_TECHNOLOGY.md`](backend/SOURCES_AND_TECHNOLOGY.md) for full data sources, licenses, and compliance.
+
+> ⚠️ **This repository is the working *web prototype* of that Android app.** It runs the identical
+> pipeline in the browser/server so the architecture can be seen and tested end-to-end — browser
+> mic → the same engine → the same ledger anchor. Every page you see here is a preview of how the
+> app will behave on a phone.
+
+---
+
+## 🤖 VoiceShield on Android — architecture (three planes)
+
+Detection is **fully on-device**; raw audio never leaves the phone. Only scalar evidence + hashes
+reach the operator server, which anchors every report to the mandatory NBF ledger.
+
+```
+┌─ 1 · DATA PLANE  (Android, Kotlin) ────────────────────────────────┐
+│  AudioRecord 16 kHz mono int16 → MPSC ring buffer (3 s / 1 s)      │
+│  VAD + silence gate → Kotlin DSP: FFT · autocorrelation pitch ·    │
+│  jitter/shimmer · phase continuity · watermark band 7.0–7.5 kHz    │
+└──────────────────────────────┬─────────────────────────────────────┘
+                               ▼  (no network in the hot loop)
+┌─ 2 · MAIN ENGINE  (Android, on-device) ────────────────────────────┐
+│  onnxruntime-android + NNAPI · bundled AASIST-L INT8 (< 2 MB)      │
+│  prosodic XAI · speaker voice-print · watermark short-circuit → 0.0│
+│  fusion: score = 0.7 × model + 0.3 × XAI → risk band + mitigation  │
+└──────────────────────────────┬─────────────────────────────────────┘
+                               ▼  scalar evidence + hashes only
+┌─ 3 · EVIDENCE LEDGER ──────────────────────────────────────────────┐
+│  on-device: Room + AES-256-GCM (Android Keystore) + local PoW block│
+│  → WorkManager retry → POST /api/mobile/evidence → server forensic │
+│  PDF → mandatory NBF-Fabric + IPFS anchor → status = anchored      │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+**This website is the prototype surface.** `frontend/` streams browser-mic audio over WebSocket
+into `backend/`, which runs the same engine (`backend/app/engine`) and mirrors the same ledger —
+so the Data Plane boxes above become "browser mic → WebSocket", while the engine and the
+fabric/IPFS anchor stay byte-identical.
 
 ---
 
@@ -40,7 +77,7 @@ Incident log  ─▶  I4C-ready forensic PDF
 **Key ideas**
 
 - **Multi-layer detection, not one model.** Raw audio is scored by ensemble acoustic models AND by explainable prosodic features (jitter/shimmer/phase continuity). Both are combined: `score = 0.7 × model_prob + 0.3 × xai_risk`.
-- **Real-time by design.** Windows stream over WebSocket; model runs per window; only scalar scores cross the wire (no raw audio leaves the user's device/network — DPDP-safe).
+- **On-device by design (Android).** The app scores every window on the phone with `onnxruntime-android` + NNAPI — no cloud round-trip, no raw audio leaving the device (DPDP-safe). The web prototype streams over WebSocket purely to demonstrate the same engine; the app itself uses **no WebSocket**.
 - **Free alerts everywhere.** Telegram, Gmail SMTP, ntfy.sh, Fast2SMS, and webhooks.
 - **Tamper-evident reports.** Every forensic PDF is hashed and anchored into a local proof-of-work blockchain ledger, then mirrored to a **Hyperledger Fabric (MeitY NBF-Lite)** external anchor with an **AES-256-GCM** ciphertext copy pinned on IPFS (raw forensic content never leaves operator custody — DPDP-safe).
 
@@ -52,14 +89,15 @@ Incident log  ─▶  I4C-ready forensic PDF
 |---|---|
 | Detection | Dhwani (multilingual Indian deepfake model) + AASIST-L official ensemble, INT8 ONNX inference on CPU |
 | Explainability | Jitter %, Shimmer %, Phase Continuity, Pitch Stability, noise-floor dropouts |
-| Real-time | Live call analysis over WebSocket, 3 s windows / 1 s hop (300 ms/100 ms fallback). A **latency profile** governs the live hot loop: `latency_profile=realtime` (default) scores each window with the trained AASIST-L official + XAI prosody (`VOICESHIELD_LATENCY_BUDGET_MS`-gated, measured ~1.5-1.6 s/window on reference CPU); `latency_profile=ensemble` runs the full Dhwani ensemble live (seconds/window) |
+| Real-time | On-device by default (Android): the ring buffer feeds the engine locally. Web prototype: live analysis over WebSocket, 3 s windows / 1 s hop (300 ms/100 ms fallback). A **latency profile** governs the live hot loop: `latency_profile=realtime` (default) scores each window with the trained AASIST-L official + XAI prosody (`VOICESHIELD_LATENCY_BUDGET_MS`-gated, measured ~1.5-1.6 s/window on reference CPU); `latency_profile=ensemble` runs the full Dhwani ensemble live (seconds/window) |
 | Risk | Role-aware thresholds — Adult ≥ 0.85 critical, Child ≥ 0.70 critical (`ADULT_THRESHOLD` / `CHILD_THRESHOLD` in `.env`) |
 | Alerting | Telegram, Gmail SMTP, ntfy.sh, Fast2SMS, webhook — all optional |
 | Escalation | **Suspected** fraud → optional DoT conduct hand-off (Sanchar Saathi / Chakshu / DIP) via `CHAKSHU_DIP_WEBHOOK_URL`; **confirmed** fraud → I4C/1930 flow in the forensic PDF |
 | Context | Optional **call-context enrichment** (opt-in, `CONTEXTUAL_ENRICHMENT=true`): known-contact, caller reputation (escalation count), call-origin and transaction value adjust the risk before thresholds — fail-open when no context is provided |
 | Verification | **Configurable mitigation workflows** (`backend/workflows.json`, JSON — no code deploy): per-role × risk-band actions + channels (pre-transaction call-back, MFA, supervisor escalation) with `POST /api/incidents/{iid}/escalate` feeding back caller reputation |
 | SDK | Official **Python SDK** (`backend/sdk/voiceshield_sdk`, sync + async) on an API contract defined in `backend/sdk/voiceshield.proto` (proto3) — REST + live WebSocket call sessions |
-| On-device | **Edge inference worker** (`deploy/edge/vs_edge.py`) — CLI-only, no GPU/cloud dependency, proves the on-device inference option |
+| On-device | **Android app** (native Kotlin) — detection fully on-device via `onnxruntime-android` + NNAPI; `deploy/edge/vs_edge.py` CLI worker demonstrates the same on-device inference server-side |
+| Android app | Kotlin · Jetpack Compose · Material 3 · onnxruntime-android + NNAPI · Room · WorkManager · Android Keystore | Fully on-device detection; on-device evidence blocks → REST/gRPC sync → server-anchored NBF report |
 | Child Shield | Lower threshold, auto-mute, protective overlay |
 | Forensics | I4C-ready PDF reports (IST timestamps, legal next steps) |
 | Integrity | SHA-256 + Merkle-root anchored to a PoW blockchain ledger |
@@ -142,6 +180,11 @@ Double-click **`start_all.bat`** (backend :8000 + frontend :5173).
 
 ## 🔌 REST API (all endpoints)
 
+> **Transport contract.** The Android app uses **REST + gRPC only — no WebSocket in the app**. The
+> `/ws/stream/{call_id}` live-stream surface exists for the web prototype (this site) and the
+> Python SDK. The app syncs evidence blocks and verifications through `/api/mobile/evidence`,
+> `/api/blockchain/verify/...` and the report endpoints.
+
 | Method | Route | What it does |
 |---|---|---|
 | POST | `/api/analyze` | Analyze an uploaded audio file (full windowed sweep) |
@@ -165,6 +208,7 @@ Double-click **`start_all.bat`** (backend :8000 + frontend :5173).
 | POST | `/api/speakers/register` | Enroll a speaker voice-print |
 | POST | `/api/incidents/{iid}/escalate` | Confirm fraud → escalate + bump caller reputation for future calls |
 | GET | `/api/workflows` | Current mitigation workflow rules (adult/child × risk band) |
+| POST | `/api/mobile/evidence` | *(planned)* Android app evidence-block sync → server forensic PDF + NBF anchor (WorkManager retry) |
 | GET | `/health`, `/info` | Health / model status |
 
 > `/api/analyze` also accepts optional context fields (multipart form: `caller`, `origin`, `txn_value`, `txn_category`, `known_contact`); the live WebSocket accepts the same as query params. See [`backend/sdk/SDK_README.md`](backend/sdk/SDK_README.md) for the SDK + proto contract.
@@ -208,6 +252,7 @@ voiceshield/
 │   └── requirements.txt
 ├── deploy/
 │   └── edge/                    # vs_edge.py — on-device inference worker (CLI)
+├── mobile/                      # Android app (Kotlin — planned): data plane + engine + ledger sync
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/               # Dashboard, Incidents, Reports
