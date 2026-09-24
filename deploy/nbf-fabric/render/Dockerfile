@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1
 #
+# Kubo release tag for the official ipfs/kubo image (flaky HTTP tarball mirrors).
+ARG KUBO_IMAGE_TAG=0.43.0
+#
 # VoiceShield AI — single-container NBF anchor image for Render / Cloud Run.
 #
 # Everything runs in ONE container (no Docker-in-Docker):
@@ -37,7 +40,7 @@ ARG TARGETARCH
 # Fabric releases only publish linux-amd64 binary tarballs for the 2.2 LTS line.
 # v2.2.15 is the last 2.2.x release and matches the deploy stack (peer:2.2).
 ARG FABRIC_VERSION=2.2.15
-ARG KUBO_VERSION=0.43.0
+ARG KUBO_IMAGE_TAG=0.43.0
 
 ENV FABRIC_CFG_PATH=/app/config \
     HOME=/app \
@@ -57,6 +60,11 @@ RUN set -eux; \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs; \
     rm -rf /var/lib/apt/lists/*
 
+# Kubo IPFS binary — copied from the official image on Docker Hub (the
+# dist.ipfs.tech / GitHub release tarball endpoints intermittently 404 in CI,
+# which broke curl -fSL; Docker Hub pulls are reliable from GHA runners).
+COPY --from=ipfs/kubo:${KUBO_IMAGE_TAG} /usr/local/bin/ipfs /usr/local/bin/ipfs
+
 # Fabric 2.2 binaries (Official release tarball: peer, orderer, cryptogen, configtxgen)
 RUN set -eux; \
     ARCH="${TARGETARCH:-amd64}"; \
@@ -67,15 +75,6 @@ RUN set -eux; \
     D=$(find /tmp/fabric-release -maxdepth 2 -type f -name peer -printf '%h\n' | head -n1); \
     cp "${D}/peer" "${D}/orderer" "${D}/cryptogen" "${D}/configtxgen" /usr/local/bin/; \
     rm -rf /tmp/fabric-release /tmp/fabric.tgz
-
-# Kubo IPFS binaries (GitHub Releases URL is reliable; dist.ipfs.tech gateway
-# intermittently 404s in CI, which broke curl -fSL).
-RUN set -eux; \
-    ARCH="${TARGETARCH:-amd64}"; \
-    curl -fSL "https://github.com/ipfs/kubo/releases/download/v${KUBO_VERSION}/kubo_${KUBO_VERSION}_linux-${ARCH}.tar.gz" -o /tmp/kubo.tgz; \
-    tar -xzf /tmp/kubo.tgz -C /tmp; \
-    mv /tmp/kubo/ipfs /usr/local/bin/ipfs; \
-    rm -rf /tmp/kubo /tmp/kubo.tgz
 
 # Single-container conveniences: resolve the Fabric MSP hostnames (used inside
 # the channel config / connection profile) back to loopback so gossip + orderer

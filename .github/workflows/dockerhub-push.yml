@@ -10,7 +10,7 @@ on:
 env:
   IMAGE_NAME: ryxonix/nbf-lite-voiceshield
   FABRIC_VERSION: 2.2.15
-  KUBO_VERSION: 0.43.0
+  KUBO_IMAGE_TAG: 0.43.0
 
 jobs:
   build-push:
@@ -42,4 +42,4 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ github.sha }}
           build-args: |
             FABRIC_VERSION=${{ env.FABRIC_VERSION }}
-            KUBO_VERSION=${{ env.KUBO_VERSION }}
+            KUBO_IMAGE_TAG=${{ env.KUBO_IMAGE_TAG }}
