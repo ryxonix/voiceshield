@@ -13,14 +13,15 @@ const WALLET_DIR =
   process.env.WALLET_DIR || path.join(__dirname, 'wallet');
 
 async function buildCore({ user, channel, ccname, cfgpath, local, mspId, fcn, args, evaluate }) {
+  const identityLabel = user || 'User1';
   const ccp = JSON.parse(fs.readFileSync(CCP, 'utf8'));
   const wallet = await Wallets.newFileSystemWallet(WALLET_DIR);
-  const identity = await wallet.get(user || 'User1');
-  if (!identity) throw new Error(`identity "${user}" missing in wallet (run enrollAdmin/registerUser)`);
+  const identity = await wallet.get(identityLabel);
+  if (!identity) throw new Error(`identity "${identityLabel}" missing in wallet (run enrollAdmin/registerUser)`);
 
   const gw = new Gateway();
   const asLocalhost = process.env.AS_LOCALHOST !== 'false';
-  await gw.connect(ccp, { wallet, identity: user, discovery: { enabled: true, asLocalhost } });
+  await gw.connect(ccp, { wallet, identity: identityLabel, discovery: { enabled: true, asLocalhost } });
   const network = await gw.getNetwork(channel || 'mychannel');
   const contract = network.getContract(ccname || 'fabcar');
   return { gw, contract };
