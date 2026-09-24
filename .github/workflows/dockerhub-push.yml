@@ -10,7 +10,7 @@ on:
 env:
   IMAGE_NAME: ryxonix/nbf-lite-voiceshield
   FABRIC_VERSION: 2.2.15
-  KUBO_IMAGE_TAG: 0.43.0
+  KUBO_IMAGE_TAG: v0.43.0
 
 jobs:
   build-push:

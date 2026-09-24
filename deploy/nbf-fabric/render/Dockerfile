@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
 # Kubo release tag for the official ipfs/kubo image (flaky HTTP tarball mirrors).
-ARG KUBO_IMAGE_TAG=0.43.0
+ARG KUBO_IMAGE_TAG=v0.43.0
 #
 # VoiceShield AI — single-container NBF anchor image for Render / Cloud Run.
 #
